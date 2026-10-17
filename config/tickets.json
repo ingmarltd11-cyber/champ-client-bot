@@ -1,0 +1,112 @@
+{
+  "panel": {
+    "title": "Champ Support",
+    "description": "Selecteer hieronder de reden voor je ticket. Een teamlid helpt je zo snel mogelijk.\n\n**Let op:** open niet meerdere tickets voor hetzelfde probleem.",
+    "placeholder": "Kies een categorie...",
+    "color": "#FFC93C",
+    "footer": "Champ Client Support"
+  },
+  "settings": {
+    "ticketCategoryId": "TICKET_CATEGORY_ID",
+    "maxOpenTicketsPerUser": 1,
+    "defaultSupportRoleName": "Support",
+    "naming": "{emoji}-{username}",
+    "logChannelId": "LOG_CHANNEL_ID",
+    "deleteDelaySeconds": 5,
+    "sendTranscriptDm": true,
+    "transcriptFormat": "both",
+    "rating": {
+      "enabled": true,
+      "title": "Beoordeel onze support",
+      "message": "Hoe tevreden ben je over dit ticket? Klik op een aantal sterren."
+    },
+    "autoClose": {
+      "enabled": true,
+      "inactiveHours": 48,
+      "warningHours": 24,
+      "warningMessage": "Dit ticket is al een tijdje inactief en wordt automatisch gesloten bij aanhoudende inactiviteit.",
+      "reason": "Automatisch gesloten wegens inactiviteit."
+    }
+  },
+  "types": [
+    {
+      "id": "support",
+      "label": "Algemene Support",
+      "emoji": "support",
+      "description": "Vragen of problemen met de client",
+      "supportRoleId": "",
+      "pingSupport": true,
+      "claimEnabled": true,
+      "ratingEnabled": true,
+      "maxOpen": null,
+      "questions": [
+        { "id": "version", "label": "Client versie", "style": "short", "required": true, "placeholder": "bijv. Beta 0.9.9.1", "maxLength": 20 },
+        { "id": "issue", "label": "Beschrijf je probleem", "style": "paragraph", "required": true, "placeholder": "Wat gebeurt er en wanneer?", "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "billing",
+      "label": "Bestelling / Betaling",
+      "emoji": "billing",
+      "description": "Vragen over een order of betaling (lifetime of abonnement)",
+      "supportRoleId": "",
+      "pingSupport": true,
+      "claimEnabled": true,
+      "ratingEnabled": true,
+      "maxOpen": null,
+      "questions": [
+        { "id": "order", "label": "Order ID / e-mailadres", "style": "short", "required": true, "placeholder": "waarmee je hebt besteld", "maxLength": 100 },
+        { "id": "plan", "label": "Lifetime of maandelijks?", "style": "short", "required": true, "placeholder": "lifetime / maandelijks", "maxLength": 20 },
+        { "id": "issue", "label": "Wat is het probleem?", "style": "paragraph", "required": true, "placeholder": "Omschrijf het zo volledig mogelijk", "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "bug",
+      "label": "Bug Report",
+      "emoji": "bug",
+      "description": "Meld een bug in de client",
+      "supportRoleId": "",
+      "pingSupport": true,
+      "claimEnabled": true,
+      "ratingEnabled": false,
+      "maxOpen": null,
+      "questions": [
+        { "id": "version", "label": "Client versie", "style": "short", "required": true, "placeholder": "bijv. Beta 0.9.9.1", "maxLength": 20 },
+        { "id": "module", "label": "Welke module?", "style": "short", "required": false, "placeholder": "bijv. Seed Xray", "maxLength": 50 },
+        { "id": "bug", "label": "Beschrijf de bug", "style": "paragraph", "required": true, "placeholder": "Wat had je verwacht en wat gebeurde er?", "maxLength": 1000 },
+        { "id": "steps", "label": "Stappen om te reproduceren", "style": "paragraph", "required": false, "placeholder": "1. ... 2. ...", "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "media",
+      "label": "Media Aanvraag",
+      "emoji": "media",
+      "description": "Vraag de Media-rol aan als content creator",
+      "supportRoleId": "",
+      "pingSupport": false,
+      "claimEnabled": true,
+      "ratingEnabled": true,
+      "maxOpen": 1,
+      "questions": [
+        { "id": "channel", "label": "Link naar je kanaal", "style": "short", "required": true, "placeholder": "YouTube / TikTok / Twitch link", "maxLength": 200 },
+        { "id": "subs", "label": "Aantal volgers/abonnees", "style": "short", "required": true, "placeholder": "bijv. 2500", "maxLength": 20 },
+        { "id": "proposal", "label": "Wat wil je maken met Champ?", "style": "paragraph", "required": true, "placeholder": "Omschrijf je content-plannen", "maxLength": 1000 }
+      ]
+    },
+    {
+      "id": "partner",
+      "label": "Partner Aanvraag",
+      "emoji": "partner",
+      "description": "Samenwerking of partnership aanvragen",
+      "supportRoleId": "",
+      "pingSupport": true,
+      "claimEnabled": true,
+      "ratingEnabled": true,
+      "maxOpen": 1,
+      "questions": [
+        { "id": "who", "label": "Wie ben je / welke server?", "style": "short", "required": true, "placeholder": "naam + ledenaantal", "maxLength": 100 },
+        { "id": "proposal", "label": "Omschrijf je voorstel", "style": "paragraph", "required": true, "placeholder": "Wat houdt de samenwerking in?", "maxLength": 1000 }
+      ]
+    }
+  ]
+}
