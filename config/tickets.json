@@ -1,6 +1,6 @@
 {
   "panel": {
-    "title": "Champ Support",
+    "title": "🎫 Champ Support",
     "description": "Selecteer hieronder de reden voor je ticket. Een teamlid helpt je zo snel mogelijk.\n\n**Let op:** open niet meerdere tickets voor hetzelfde probleem.",
     "placeholder": "Kies een categorie...",
     "color": "#FFC93C",
@@ -17,14 +17,14 @@
     "transcriptFormat": "both",
     "rating": {
       "enabled": true,
-      "title": "Beoordeel onze support",
+      "title": "⭐ Beoordeel onze support",
       "message": "Hoe tevreden ben je over dit ticket? Klik op een aantal sterren."
     },
     "autoClose": {
       "enabled": true,
       "inactiveHours": 48,
       "warningHours": 24,
-      "warningMessage": "Dit ticket is al een tijdje inactief en wordt automatisch gesloten bij aanhoudende inactiviteit.",
+      "warningMessage": "⚠️ Dit ticket is al een tijdje inactief en wordt automatisch gesloten bij aanhoudende inactiviteit.",
       "reason": "Automatisch gesloten wegens inactiviteit."
     }
   },
@@ -32,7 +32,7 @@
     {
       "id": "support",
       "label": "Algemene Support",
-      "emoji": "support",
+      "emoji": "🛠️",
       "description": "Vragen of problemen met de client",
       "supportRoleId": "",
       "pingSupport": true,
@@ -47,7 +47,7 @@
     {
       "id": "billing",
       "label": "Bestelling / Betaling",
-      "emoji": "billing",
+      "emoji": "💳",
       "description": "Vragen over een order of betaling (lifetime of abonnement)",
       "supportRoleId": "",
       "pingSupport": true,
@@ -63,7 +63,7 @@
     {
       "id": "bug",
       "label": "Bug Report",
-      "emoji": "bug",
+      "emoji": "🐞",
       "description": "Meld een bug in de client",
       "supportRoleId": "",
       "pingSupport": true,
@@ -80,7 +80,7 @@
     {
       "id": "media",
       "label": "Media Aanvraag",
-      "emoji": "media",
+      "emoji": "🎬",
       "description": "Vraag de Media-rol aan als content creator",
       "supportRoleId": "",
       "pingSupport": false,
@@ -96,7 +96,7 @@
     {
       "id": "partner",
       "label": "Partner Aanvraag",
-      "emoji": "partner",
+      "emoji": "🤝",
       "description": "Samenwerking of partnership aanvragen",
       "supportRoleId": "",
       "pingSupport": true,
