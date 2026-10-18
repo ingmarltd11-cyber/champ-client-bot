@@ -7,7 +7,7 @@ const {
   GatewayIntentBits,
   MessageFlags,
 } = require('discord.js');
-const { assertEnv, REQUIRED_ENV } = require('./config');
+const { assertEnv, REQUIRED_ENV, AI } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
 const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
@@ -40,6 +40,11 @@ for (const command of loadCommands()) {
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   console.log(describeCategoryStorage());
+  console.log(
+    AI.apiKey
+      ? `AI support: on (${AI.model}, ticket types: ${AI.ticketTypes.join(', ')})`
+      : 'AI support: off (no AI_API_KEY)'
+  );
 
   // Keeps the slash commands in sync with the code, so a new command exists after a deploy
   // without running npm run deploy by hand. A failure here must not stop the bot.
