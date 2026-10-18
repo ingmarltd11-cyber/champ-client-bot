@@ -8,7 +8,7 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Announcements lock**: `/setup-permissions` locks `#announcements`. Only `developer`, `owner`, `media` and `media manager` can post there.
 - **Word filter**: any message containing the whole word `rat` is deleted silently.
 - **Roles delete (admin)**: `/setup-roles-delete` deletes all deletable roles after a confirm button. Channels are never touched.
-- **Tickets**: `/ticket-panel` posts a category menu; each choice opens a private `ticket-<username>` channel. Staff (including `support`) always have access. The opener or staff can close it with confirmation.
+- **Tickets**: `/ticket-panel` posts a category menu; each choice opens a private `ticket-<username>` channel. Staff (including `support`) always have access. Closing needs a reason. Staff close directly; the opener sends a close request that staff accept or deny. The reason is posted in the ticket and saved to Supabase.
 - **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories. A category can have up to 5 form questions (shown as a Discord form before the ticket opens; answers are posted in the ticket) and a custom welcome message.
 - **Reviews**: `/review` posts a star rating and description in `#reviews`.
 

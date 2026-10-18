@@ -20,8 +20,14 @@ create table if not exists tickets (
   warned boolean not null default false,
   opened_at timestamptz not null default now(),
   last_activity_at timestamptz not null default now(),
-  closed_at timestamptz
+  closed_at timestamptz,
+  close_reason text,
+  closed_by text
 );
+
+-- For databases created before close reasons existed (run once):
+alter table tickets add column if not exists close_reason text;
+alter table tickets add column if not exists closed_by text;
 
 create index if not exists tickets_status_idx on tickets (status);
 create index if not exists tickets_user_idx on tickets (user_id);

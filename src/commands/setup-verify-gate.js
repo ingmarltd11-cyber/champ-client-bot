@@ -7,6 +7,17 @@ const {
 const { CHANNELS, VERIFIED_VIEW_ROLE_NAMES, ALWAYS_VISIBLE_CHANNELS } = require('../config');
 const { findRole, baseChannelName } = require('../utils/permissions');
 
+// The bot itself must keep working after the gate runs, otherwise it can no longer
+// post the ticket panel, reviews or verify messages in the channels it just locked.
+const BOT_PERMISSIONS = {
+  ViewChannel: true,
+  SendMessages: true,
+  ReadMessageHistory: true,
+  EmbedLinks: true,
+  AttachFiles: true,
+  ManageChannels: true,
+};
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-verify-gate')
@@ -19,14 +30,18 @@ module.exports = {
     const { guild } = interaction;
     const everyone = guild.roles.everyone;
     const viewRoles = VERIFIED_VIEW_ROLE_NAMES.map((name) => findRole(guild, name)).filter(Boolean);
+    const bot = guild.members.me;
 
     let locked = 0;
     const failed = [];
 
     for (const channel of guild.channels.cache.values()) {
-      if (channel.type === ChannelType.GuildCategory) continue;
-
       try {
+        // Explicit allow for the bot, so @everyone's deny does not lock it out.
+        if (bot) await channel.permissionOverwrites.edit(bot, BOT_PERMISSIONS);
+
+        if (channel.type === ChannelType.GuildCategory) continue;
+
         if (baseChannelName(channel.name) === CHANNELS.verify) {
           await channel.permissionOverwrites.edit(everyone, { ViewChannel: true });
           continue;
@@ -51,7 +66,9 @@ module.exports = {
 
     const failure = failed.length ? ` Failed: ${failed.join(', ')}.` : '';
     await interaction.editReply({
-      content: `✅ Locked ${locked} channel(s). #${CHANNELS.verify} stays visible to everyone.${failure}`,
+      content: `✅ Locked ${locked} channel(s). #${CHANNELS.verify} stays visible to everyone.${
+        bot ? '' : ' ⚠️ Could not find the bot member, so its own access was not added.'
+      }${failure}`,
     });
   },
 };

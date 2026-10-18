@@ -4,10 +4,15 @@ const {
   MAX_QUESTIONS,
   MAX_QUESTION_LENGTH,
   MAX_MESSAGE_LENGTH,
+  BUTTON_COLORS,
+  DEFAULT_BUTTON_COLOR,
+  isValidEmoji,
   loadCategories,
   saveCategories,
   slugify,
 } = require('../utils/ticketCategories');
+
+const colorChoices = BUTTON_COLORS.map((color) => ({ name: color, value: color }));
 
 function reply(interaction, content) {
   return interaction.reply({ content, flags: MessageFlags.Ephemeral });
@@ -24,6 +29,10 @@ function describeCategory(category) {
     questions.forEach((q, i) => lines.push(`   ${i + 1}. ${q}`));
   } else {
     lines.push('   No form questions (ticket opens directly).');
+  }
+  lines.push(`   Button colour: ${category.buttonColor ?? DEFAULT_BUTTON_COLOR}`);
+  if (category.emoji && !isValidEmoji(category.emoji)) {
+    lines.push(`   ⚠️ Emoji "${category.emoji}" is not a real emoji and is skipped on the panel.`);
   }
   lines.push(category.welcomeMessage ? '   Welcome message: set.' : '   Welcome message: default.');
   return lines.join('\n');
@@ -47,6 +56,13 @@ module.exports = {
         .addStringOption((option) =>
           option.setName('emoji').setDescription('Optional emoji').setRequired(false)
         )
+        .addStringOption((option) =>
+          option
+            .setName('color')
+            .setDescription(`Button colour (default: ${DEFAULT_BUTTON_COLOR})`)
+            .setRequired(false)
+            .addChoices(...colorChoices)
+        )
     )
     .addSubcommand((sub) =>
       sub
@@ -54,6 +70,31 @@ module.exports = {
         .setDescription('Remove a ticket category.')
         .addStringOption((option) =>
           option.setName('id').setDescription('Category ID from /ticket-category list').setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('emoji')
+        .setDescription('Set or clear the emoji on a category button.')
+        .addStringOption((option) =>
+          option.setName('id').setDescription('Category ID').setRequired(true)
+        )
+        .addStringOption((option) =>
+          option
+            .setName('emoji')
+            .setDescription('A real emoji, e.g. 🎫 or <:name:id>. Leave empty to clear it.')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('color')
+        .setDescription('Set the button colour of a category on the ticket panel.')
+        .addStringOption((option) =>
+          option.setName('id').setDescription('Category ID').setRequired(true)
+        )
+        .addStringOption((option) =>
+          option.setName('color').setDescription('Button colour').setRequired(true).addChoices(...colorChoices)
         )
     )
     .addSubcommand((sub) => sub.setName('list').setDescription('List the ticket categories, questions and messages.'))
@@ -126,6 +167,14 @@ module.exports = {
       const label = interaction.options.getString('label').trim();
       const description = interaction.options.getString('description').trim();
       const emoji = interaction.options.getString('emoji')?.trim() || undefined;
+      const buttonColor = interaction.options.getString('color') ?? DEFAULT_BUTTON_COLOR;
+
+      if (emoji && !isValidEmoji(emoji)) {
+        return reply(
+          interaction,
+          `❌ \`${emoji}\` is not a real emoji. Use a unicode emoji like 🎫 or a custom one like <:name:id>.`
+        );
+      }
       const id = slugify(label);
 
       if (!id) return reply(interaction, '❌ The label must contain at least one letter or number.');
@@ -136,7 +185,7 @@ module.exports = {
         return reply(interaction, `❌ A category with ID \`${id}\` already exists.`);
       }
 
-      categories.push({ id, label, description, emoji });
+      categories.push({ id, label, description, emoji, buttonColor });
       saveCategories(categories);
       return reply(interaction, `✅ Added \`${id}\`. Run /ticket-panel again to show it on a new panel.`);
     }
@@ -191,6 +240,34 @@ module.exports = {
       category.welcomeMessage = text;
       saveCategories(categories);
       return reply(interaction, `✅ Welcome message set for \`${id}\`.`);
+    }
+
+    if (sub === 'emoji') {
+      const emoji = interaction.options.getString('emoji')?.trim();
+
+      if (!emoji) {
+        delete category.emoji;
+        saveCategories(categories);
+        return reply(interaction, `✅ Emoji cleared on \`${id}\`. Run /ticket-panel again to refresh the panel.`);
+      }
+
+      if (!isValidEmoji(emoji)) {
+        return reply(
+          interaction,
+          `❌ \`${emoji}\` is not a real emoji. Use a unicode emoji like 🎫 or a custom one like <:name:id>.`
+        );
+      }
+
+      category.emoji = emoji;
+      saveCategories(categories);
+      return reply(interaction, `✅ Emoji set on \`${id}\`. Run /ticket-panel again to refresh the panel.`);
+    }
+
+    if (sub === 'color') {
+      const color = interaction.options.getString('color');
+      category.buttonColor = color;
+      saveCategories(categories);
+      return reply(interaction, `✅ Button colour of \`${id}\` set to ${color}. Run /ticket-panel again to refresh the panel.`);
     }
 
     if (sub === 'message-clear') {

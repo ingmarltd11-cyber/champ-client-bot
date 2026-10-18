@@ -49,6 +49,8 @@ const TICKETS = {
   categoryName: 'Tickets',
   channelPrefix: 'ticket-',
   closeDelaySeconds: 5,
+  // Button colours for ticket buttons: blue, grey, green or red.
+  buttonColors: { close: 'red', accept: 'red', deny: 'grey' },
 };
 
 const BRAND_COLOR = 0x9b59b6;

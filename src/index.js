@@ -11,6 +11,8 @@ const { assertEnv, REQUIRED_ENV } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
 const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
+const { isAdmin } = require('./utils/permissions');
+const { registerCommands } = require('./utils/registerCommands');
 const { respondVerified } = require('./features/verify');
 const tickets = require('./features/tickets');
 const rolesDelete = require('./commands/setup-roles-delete');
@@ -37,6 +39,10 @@ for (const command of loadCommands()) {
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   console.log(describeCategoryStorage());
+
+  // Keeps the slash commands in sync with the code, so a new command exists after a deploy
+  // without running npm run deploy by hand. A failure here must not stop the bot.
+  registerCommands().catch((err) => console.error('Could not register commands:', err.message));
 });
 
 client.on(Events.MessageCreate, (message) => {
@@ -60,16 +66,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return tickets.handleFormSubmit(interaction);
     }
 
+    if (interaction.isModalSubmit() && interaction.customId === tickets.CLOSE_MODAL_ID) {
+      return tickets.handleCloseModal(interaction);
+    }
+
     if (interaction.isButton()) {
       const id = interaction.customId;
 
       if (id === 'verify-button') return respondVerified(interaction);
       if (id.startsWith('ticket-open:')) return tickets.handleOpen(interaction);
       if (id === 'ticket-close') return tickets.requestClose(interaction);
-      if (id === 'ticket-close-confirm') return tickets.confirmClose(interaction);
-      if (id === 'ticket-close-cancel') {
-        return interaction.update({ content: 'Cancelled.', components: [] });
-      }
+      if (id === 'ticket-close-accept') return tickets.acceptCloseRequest(interaction);
+      if (id === 'ticket-close-deny') return tickets.denyCloseRequest(interaction);
       if (id.startsWith('roles-delete:')) return rolesDelete.handleButton(interaction);
       if (id.startsWith('server-delete:')) return serverDelete.handleButton(interaction);
     }
@@ -77,7 +85,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.error('Interaction failed:', err);
 
     if (interaction.isRepliable()) {
-      const payload = { content: '❌ Something went wrong. Please try again.', flags: MessageFlags.Ephemeral };
+      // Admins get the real reason, so a failure is diagnosable instead of just "Something went wrong".
+      const isServerAdmin = interaction.member ? isAdmin(interaction.member) : false;
+      const detail = isServerAdmin ? `\n\`${String(err.message).slice(0, 300)}\`` : '';
+      const payload = {
+        content: `❌ Something went wrong. Please try again.${detail}`,
+        flags: MessageFlags.Ephemeral,
+      };
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(payload).catch(() => {});
       } else {

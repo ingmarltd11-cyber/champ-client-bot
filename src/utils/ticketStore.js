@@ -12,10 +12,15 @@ async function saveTicketOpened({ channelId, guildId, userId, typeId }) {
   if (error) throw new Error(`Could not save opened ticket: ${error.message}`);
 }
 
-async function saveTicketClosed({ channelId }) {
+async function saveTicketClosed({ channelId, closedBy, reason }) {
   const { error } = await getSupabase()
     .from('tickets')
-    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .update({
+      status: 'closed',
+      closed_at: new Date().toISOString(),
+      close_reason: reason ?? null,
+      closed_by: closedBy ?? null,
+    })
     .eq('channel_id', channelId);
   if (error) throw new Error(`Could not save closed ticket: ${error.message}`);
 }

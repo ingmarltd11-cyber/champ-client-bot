@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { ButtonStyle, parseEmoji } = require('discord.js');
 
 // Runtime edits made with /ticket-category are stored here. Set DATA_DIR to a persistent
 // volume (e.g. /data on Railway) so the settings survive redeploys. Default: the git-ignored data/ folder.
@@ -13,6 +14,36 @@ const MAX_CATEGORIES = 25;
 const MAX_QUESTIONS = 5;
 const MAX_QUESTION_LENGTH = 45;
 const MAX_MESSAGE_LENGTH = 1000;
+
+// Button colours by name, so they can be stored in JSON and picked from a slash command.
+const BUTTON_COLORS = ['blue', 'grey', 'green', 'red'];
+const DEFAULT_BUTTON_COLOR = 'blue';
+const BUTTON_STYLES = {
+  blue: ButtonStyle.Primary,
+  grey: ButtonStyle.Secondary,
+  green: ButtonStyle.Success,
+  red: ButtonStyle.Danger,
+};
+
+// Unknown or missing colours fall back to blue.
+function buttonStyle(color) {
+  return BUTTON_STYLES[color] ?? BUTTON_STYLES[DEFAULT_BUTTON_COLOR];
+}
+
+// Discord rejects a button emoji unless it is a real unicode emoji or a custom emoji
+// with an ID. A plain word such as "ticket" makes the whole panel fail to post.
+const UNICODE_EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D)+$/u;
+
+function isValidEmoji(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 100) return false;
+
+  const parsed = parseEmoji(trimmed);
+  if (!parsed) return false;
+  if (parsed.id) return true; // custom emoji: <:name:123>
+  return UNICODE_EMOJI_ONLY.test(parsed.name) && parsed.name.length <= 16;
+}
 
 const DEFAULT_CATEGORIES = [
   { id: 'general-support', label: 'General Support', description: 'Questions and general help', emoji: '💬' },
@@ -61,6 +92,10 @@ module.exports = {
   MAX_QUESTIONS,
   MAX_QUESTION_LENGTH,
   MAX_MESSAGE_LENGTH,
+  BUTTON_COLORS,
+  DEFAULT_BUTTON_COLOR,
+  buttonStyle,
+  isValidEmoji,
   loadCategories,
   saveCategories,
   describeCategoryStorage,
