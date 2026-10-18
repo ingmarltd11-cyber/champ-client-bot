@@ -51,7 +51,17 @@ client.once(Events.ClientReady, (readyClient) => {
   registerCommands().catch((err) => console.error('Could not register commands:', err.message));
 });
 
+let warnedAboutContent = false;
+
 client.on(Events.MessageCreate, (message) => {
+  // Without the Message Content intent Discord sends the message with empty text.
+  if (!warnedAboutContent && message.guild && !message.author?.bot && !message.content) {
+    warnedAboutContent = true;
+    console.warn(
+      'Received a message without text. Enable "Message Content Intent" in the Discord Developer Portal (Bot -> Privileged Gateway Intents).'
+    );
+  }
+
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
 
   // Answers only in website/mod tickets, only for the opener, and never gives code.

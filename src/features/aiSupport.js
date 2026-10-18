@@ -1,5 +1,5 @@
 const { AI, ROLES } = require('../config');
-const { findRole, isStaff } = require('../utils/permissions');
+const { findRole } = require('../utils/permissions');
 const {
   getContext: getFolderContext,
   splitIntoChunks,
@@ -14,6 +14,17 @@ const OPENER_PATTERN = /ticket-opener:(\d+)/;
 const replies = new Map(); // channelId -> { count, lastAt }
 const handled = new Set();
 let calls = []; // timestamps of recent model calls
+const lastSkipLog = new Map(); // channelId -> when we last logged a skip
+
+// Explains, in the Railway logs, why the assistant stayed quiet.
+function logSkip(message, reason) {
+  const id = message.channel?.id;
+  if (!id) return;
+  const now = Date.now();
+  if (now - (lastSkipLog.get(id) ?? 0) < 60000) return;
+  lastSkipLog.set(id, now);
+  console.log(`AI support ignored a message in #${message.channel?.name ?? id}: ${reason}`);
+}
 
 // Hard rule: never hand out code, and never point at a place where code lives.
 const CODE_HOSTS = [
@@ -119,34 +130,38 @@ function cooldownLeft(channelId) {
   return Math.max(0, AI.cooldownMs - (Date.now() - state.lastAt));
 }
 
-// Decides whether this message is for the assistant at all.
-function shouldHandle(message) {
-  if (!isEnabled()) return false;
-  if (!message.guild || message.author?.bot) return false;
-  if (message.system || message.webhookId) return false;
+// Why a message is not for the assistant, or null when it should be answered.
+function skipReason(message) {
+  if (!isEnabled()) return 'the AI is disabled (no AI_API_KEY)';
+  if (!message.guild) return 'not in a server';
+  if (message.author?.bot) return 'written by a bot';
+  if (message.system || message.webhookId) return 'a system or webhook message';
 
   const channel = message.channel;
   const text = String(message.content ?? '').trim();
-  if (text.length < 2) return false;
-  if (handled.has(channel?.id)) return false;
+  if (text.length < 2) return 'empty text (is the Message Content intent enabled in the Discord portal?)';
+  if (handled.has(channel?.id)) return 'this ticket was already handed to staff';
 
   const openerId = openerIdOf(channel);
 
-  // In a ticket: the opener is answered directly, staff is not.
+  // In a ticket: whoever opened it is answered, anyone else is left to staff.
   if (openerId) {
-    if (message.author.id !== openerId) return false;
-    if (message.member && isStaff(message.member)) return false;
+    if (message.author.id !== openerId) return 'not written by the ticket opener';
 
     const state = replies.get(channel.id);
-    if (state && state.count >= AI.maxRepliesPerTicket) return false;
-    if (cooldownLeft(channel.id) > 0) return false;
-    return true;
+    if (state && state.count >= AI.maxRepliesPerTicket) return 'the reply limit for this ticket was reached';
+    if (cooldownLeft(channel.id) > 0) return 'still in the cooldown between replies';
+    return null;
   }
 
   // Outside a ticket: only when the bot is mentioned.
-  if (!isMentioned(message)) return false;
-  if (cooldownLeft(channel.id) > 0) return false;
-  return true;
+  if (!isMentioned(message)) return 'the bot was not mentioned';
+  if (cooldownLeft(channel.id) > 0) return 'still in the cooldown between replies';
+  return null;
+}
+
+function shouldHandle(message) {
+  return skipReason(message) === null;
 }
 
 async function buildMessages(message, question) {
@@ -228,8 +243,19 @@ async function escalate(channel, guild, reason) {
 
 // Answers one message. Never throws: a failure here must not affect the rest of the bot.
 async function handleMessage(message) {
-  if (!shouldHandle(message)) return;
-  if (!hasBudget()) return;
+  const reason = skipReason(message);
+  if (reason) {
+    // Only log what was plausibly aimed at the assistant, and at most once a minute per channel.
+    if (message.guild && !message.author?.bot) {
+      if (isTicketChannel(message.channel) || isMentioned(message)) logSkip(message, reason);
+    }
+    return;
+  }
+
+  if (!hasBudget()) {
+    logSkip(message, 'the per-minute call limit was reached');
+    return;
+  }
 
   const channel = message.channel;
   const state = replies.get(channel.id) ?? { count: 0, lastAt: 0 };
@@ -281,6 +307,7 @@ async function handleMessage(message) {
 function resetState() {
   replies.clear();
   handled.clear();
+  lastSkipLog.clear();
   calls = [];
 }
 
