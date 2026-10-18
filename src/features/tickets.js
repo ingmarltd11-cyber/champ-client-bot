@@ -5,11 +5,14 @@ const {
   ChannelType,
   EmbedBuilder,
   MessageFlags,
+  ModalBuilder,
   PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle,
 } = require('discord.js');
 const { STAFF_ROLE_NAMES, TICKETS, BRAND_COLOR } = require('../config');
 const { findRole, isStaff } = require('../utils/permissions');
-const { loadCategories } = require('../utils/ticketCategories');
+const { loadCategories, MAX_QUESTIONS, MAX_MESSAGE_LENGTH } = require('../utils/ticketCategories');
 const { saveTicketOpened, saveTicketClosed } = require('../utils/ticketStore');
 
 const USER_ACCESS = [
@@ -28,6 +31,7 @@ const STAFF_ACCESS = [
 
 // The opener ID is stored in the channel topic so it survives restarts.
 const OPENER_PATTERN = /ticket-opener:(\d+)/;
+const FORM_PREFIX = 'ticket-form:';
 
 function staffOverwrites(guild) {
   // The support role is always included, so it always has ticket access.
@@ -77,29 +81,45 @@ function getOpenerId(channel) {
   return match ? match[1] : null;
 }
 
-async function handleSelect(interaction) {
-  const category = loadCategories().find((c) => c.id === interaction.values[0]);
-  if (!category) {
-    return interaction.reply({
-      content: '❌ This ticket category no longer exists. Ask staff to repost the panel.',
-      flags: MessageFlags.Ephemeral,
-    });
+function findExistingTicket(guild, user) {
+  const channelName = ticketChannelName(user.username);
+  return guild.channels.cache.find((channel) => channel.name === channelName) ?? null;
+}
+
+// One text input per question. Discord allows at most 5 inputs per modal.
+function buildFormModal(category) {
+  const modal = new ModalBuilder()
+    .setCustomId(`${FORM_PREFIX}${category.id}`)
+    .setTitle(category.label.slice(0, 45));
+
+  modal.addComponents(
+    category.questions.slice(0, MAX_QUESTIONS).map((question, index) =>
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(`q${index}`)
+          .setLabel(question)
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+          .setMaxLength(MAX_MESSAGE_LENGTH)
+      )
+    )
+  );
+  return modal;
+}
+
+// Creates the ticket channel. The interaction must already be deferred.
+async function createTicket(interaction, category, answers) {
+  const { guild, user, client } = interaction;
+
+  const existing = findExistingTicket(guild, user);
+  if (existing) {
+    return interaction.editReply({ content: `You already have an open ticket: ${existing}` });
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
   try {
-    const { guild, user, client } = interaction;
-    const channelName = ticketChannelName(user.username);
-
-    const existing = guild.channels.cache.find((channel) => channel.name === channelName);
-    if (existing) {
-      return interaction.editReply({ content: `You already have an open ticket: ${existing}` });
-    }
-
     const parent = await ensureTicketCategory(guild);
     const channel = await guild.channels.create({
-      name: channelName,
+      name: ticketChannelName(user.username),
       type: ChannelType.GuildText,
       parent: parent.id,
       topic: `ticket-opener:${user.id} type:${category.id}`,
@@ -110,10 +130,15 @@ async function handleSelect(interaction) {
     const embed = new EmbedBuilder()
       .setTitle(`${category.emoji ?? ''} ${category.label}`.trim())
       .setDescription(
-        `Thanks for opening a ticket, ${user}.\n\nDescribe your issue in as much detail as you can. A staff member will be with you shortly.`
+        category.welcomeMessage ||
+          `Thanks for opening a ticket, ${user}.\n\nDescribe your issue in as much detail as you can. A staff member will be with you shortly.`
       )
       .setColor(BRAND_COLOR)
       .setTimestamp();
+
+    if (answers.length) {
+      embed.addFields(answers.map(({ question, answer }) => ({ name: question, value: answer })));
+    }
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -137,6 +162,52 @@ async function handleSelect(interaction) {
     console.error('Could not create ticket:', err);
     await interaction.editReply({ content: '❌ Could not create your ticket. Please contact staff.' });
   }
+}
+
+async function handleSelect(interaction) {
+  const category = loadCategories().find((c) => c.id === interaction.values[0]);
+  if (!category) {
+    return interaction.reply({
+      content: '❌ This ticket category no longer exists. Ask staff to repost the panel.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const existing = findExistingTicket(interaction.guild, interaction.user);
+  if (existing) {
+    return interaction.reply({
+      content: `You already have an open ticket: ${existing}`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  // Categories with questions show the form first; the ticket is created on submit.
+  if (category.questions?.length) {
+    return interaction.showModal(buildFormModal(category));
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  return createTicket(interaction, category, []);
+}
+
+async function handleFormSubmit(interaction) {
+  const categoryId = interaction.customId.slice(FORM_PREFIX.length);
+  const category = loadCategories().find((c) => c.id === categoryId);
+  if (!category) {
+    return interaction.reply({
+      content: '❌ This ticket category no longer exists. Please open a new ticket.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const answers = (category.questions ?? []).slice(0, MAX_QUESTIONS).map((question, index) => ({
+    question,
+    answer: interaction.fields.getTextInputValue(`q${index}`),
+  }));
+
+  return createTicket(interaction, category, answers);
 }
 
 async function requestClose(interaction) {
@@ -195,4 +266,4 @@ async function confirmClose(interaction) {
   }, seconds * 1000);
 }
 
-module.exports = { handleSelect, requestClose, confirmClose };
+module.exports = { handleSelect, handleFormSubmit, requestClose, confirmClose };

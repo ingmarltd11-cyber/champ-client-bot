@@ -58,6 +58,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return tickets.handleSelect(interaction);
     }
 
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket-form:')) {
+      return tickets.handleFormSubmit(interaction);
+    }
+
     if (interaction.isButton()) {
       const id = interaction.customId;
 

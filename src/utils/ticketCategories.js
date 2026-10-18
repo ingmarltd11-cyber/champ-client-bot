@@ -7,6 +7,11 @@ const DATA_FILE = path.join(__dirname, '..', '..', 'data', 'ticket-categories.js
 // Discord select menus allow at most 25 options.
 const MAX_CATEGORIES = 25;
 
+// Discord modals hold at most 5 text inputs, and an input label is at most 45 characters.
+const MAX_QUESTIONS = 5;
+const MAX_QUESTION_LENGTH = 45;
+const MAX_MESSAGE_LENGTH = 1000;
+
 const DEFAULT_CATEGORIES = [
   { id: 'general-support', label: 'General Support', description: 'Questions and general help', emoji: '💬' },
   { id: 'report-player', label: 'Report a Player', description: 'Report a player for breaking the rules', emoji: '🚨' },
@@ -42,6 +47,9 @@ function slugify(text) {
 module.exports = {
   DEFAULT_CATEGORIES,
   MAX_CATEGORIES,
+  MAX_QUESTIONS,
+  MAX_QUESTION_LENGTH,
+  MAX_MESSAGE_LENGTH,
   loadCategories,
   saveCategories,
   slugify,

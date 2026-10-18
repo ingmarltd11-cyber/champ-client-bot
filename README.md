@@ -9,7 +9,7 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Word filter**: any message containing the whole word `rat` is deleted silently.
 - **Roles delete (admin)**: `/setup-roles-delete` deletes all deletable roles after a confirm button. Channels are never touched.
 - **Tickets**: `/ticket-panel` posts a category menu; each choice opens a private `ticket-<username>` channel. Staff (including `support`) always have access. The opener or staff can close it with confirmation.
-- **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories.
+- **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories. A category can have up to 5 form questions (shown as a Discord form before the ticket opens; answers are posted in the ticket) and a custom welcome message.
 - **Reviews**: `/review` posts a star rating and description in `#reviews`.
 
 ## Setup
@@ -56,6 +56,7 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/setup-roles-delete` | Admin | Delete all deletable roles (confirmation required) |
 | `/ticket-panel [channel]` | Admin | Post the ticket panel |
 | `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
+| `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
 
 ## Notes
