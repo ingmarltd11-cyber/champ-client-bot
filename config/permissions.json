@@ -1,0 +1,5 @@
+{
+  "readOnlyChannels": ["announcements", "welcome", "rules", "media-access", "giveaways", "release-information", "dev-log", "update-log", "website", "champ-client"],
+  "memberRoles": ["Champ", "Champ+"],
+  "staffRoles": ["Owner", "Developer", "Media Manager", "Support"]
+}

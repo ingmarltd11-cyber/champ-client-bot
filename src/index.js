@@ -10,6 +10,7 @@ const {
 
 const setupServer = require('./commands/setup-server');
 const setupRoles = require('./commands/setup-roles');
+const setupPerms = require('./commands/setup-perms');
 const ticketPanel = require('./commands/ticket-panel');
 const ticketStats = require('./commands/ticket-stats');
 const ticketUser = require('./commands/ticket-user');
@@ -40,6 +41,7 @@ client.commands = new Collection();
 for (const cmd of [
   setupServer,
   setupRoles,
+  setupPerms,
   ticketPanel,
   ticketStats,
   ticketUser,

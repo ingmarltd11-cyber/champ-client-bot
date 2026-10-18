@@ -12,4 +12,5 @@ module.exports = {
   getServerStructure: () => readJSON('config/server-structure.json'),
   getTicketConfig: () => readJSON('config/tickets.json'),
   getRolesConfig: () => readJSON('config/roles.json'),
+  getPermissionsConfig: () => readJSON('config/permissions.json'),
 };
