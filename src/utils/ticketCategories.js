@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-// Runtime edits made with /ticket-category are stored here (the data/ folder is git-ignored).
-const DATA_FILE = path.join(__dirname, '..', '..', 'data', 'ticket-categories.json');
+// Runtime edits made with /ticket-category are stored here. Set DATA_DIR to a persistent
+// volume (e.g. /data on Railway) so the settings survive redeploys. Default: the git-ignored data/ folder.
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const DATA_FILE = path.join(DATA_DIR, 'ticket-categories.json');
 
 // Discord select menus allow at most 25 options.
 const MAX_CATEGORIES = 25;
@@ -36,6 +38,15 @@ function saveCategories(categories) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(categories, null, 2), 'utf8');
 }
 
+// Tells you at startup where the categories come from, so a lost volume is visible in the logs.
+function describeCategoryStorage() {
+  const saved = fs.existsSync(DATA_FILE);
+  const count = loadCategories().length;
+  return `Ticket categories: ${count} loaded from ${DATA_FILE} (${
+    saved ? 'saved settings' : 'built-in defaults, no saved file yet'
+  })`;
+}
+
 function slugify(text) {
   return text
     .toLowerCase()
@@ -52,5 +63,6 @@ module.exports = {
   MAX_MESSAGE_LENGTH,
   loadCategories,
   saveCategories,
+  describeCategoryStorage,
   slugify,
 };

@@ -61,7 +61,7 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 ## Notes
 
-- Ticket categories are stored in `data/ticket-categories.json` (git-ignored). Built-in defaults are used when that file does not exist. On hosts with an ephemeral filesystem (such as Railway), runtime changes are lost on redeploy. Re-add them with `/ticket-category`, or move the file to a persistent volume.
+- Ticket categories are stored in `data/ticket-categories.json` (git-ignored). Built-in defaults are used when that file does not exist. On Railway the container filesystem is wiped on every deploy, so without a volume the settings reset to the defaults. To keep them: in Railway, add a **Volume** to the service with mount path `/data`, then set the variable `DATA_DIR=/data`. The bot logs `Ticket categories: ... loaded from ...` at startup, so you can confirm which file it uses.
 - The `reviews` and `announcements` channel names, the `Tickets` category name and the staff role list are set in `src/config.js`.
 
 ## Project structure

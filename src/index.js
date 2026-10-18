@@ -9,6 +9,7 @@ const {
 } = require('discord.js');
 const { assertEnv, REQUIRED_ENV } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
+const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
 const { respondVerified } = require('./features/verify');
 const tickets = require('./features/tickets');
@@ -35,6 +36,7 @@ for (const command of loadCommands()) {
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
+  console.log(describeCategoryStorage());
 });
 
 client.on(Events.MessageCreate, (message) => {
