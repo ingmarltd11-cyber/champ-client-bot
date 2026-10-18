@@ -6,10 +6,17 @@ const ticketPanel = require('./commands/ticket-panel');
 const ticketStats = require('./commands/ticket-stats');
 const ticketUser = require('./commands/ticket-user');
 const ticketClose = require('./commands/ticket-close');
+const deleteAllRoles = require('./commands/delete-all-roles');
 
-const commands = [setupServer, setupRoles, ticketPanel, ticketStats, ticketUser, ticketClose].map((c) =>
-  c.data.toJSON()
-);
+const commands = [
+  setupServer,
+  setupRoles,
+  ticketPanel,
+  ticketStats,
+  ticketUser,
+  ticketClose,
+  deleteAllRoles,
+].map((c) => c.data.toJSON());
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
 
