@@ -10,6 +10,8 @@ module.exports = {
     {
       name: null,
       channels: [
+        // Top of the list: anyone can see it, nobody can join it.
+        { name: 'champ.com', type: 'voice', everyone: { allow: ['ViewChannel'], deny: ['Connect'] } },
         { name: '✅│verify', type: 'text' },
         { name: '📈│Members: {count}', type: 'voice' },
       ],

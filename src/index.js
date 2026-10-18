@@ -13,6 +13,7 @@ const { filterMessage } = require('./features/wordFilter');
 const { respondVerified } = require('./features/verify');
 const tickets = require('./features/tickets');
 const rolesDelete = require('./commands/setup-roles-delete');
+const serverDelete = require('./commands/setup-server-delete');
 
 assertEnv(REQUIRED_ENV);
 
@@ -67,6 +68,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.update({ content: 'Cancelled.', components: [] });
       }
       if (id.startsWith('roles-delete:')) return rolesDelete.handleButton(interaction);
+      if (id.startsWith('server-delete:')) return serverDelete.handleButton(interaction);
     }
   } catch (err) {
     console.error('Interaction failed:', err);

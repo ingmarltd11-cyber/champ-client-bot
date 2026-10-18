@@ -53,6 +53,9 @@ const TICKETS = {
 
 const BRAND_COLOR = 0x9b59b6;
 
+// Channels every member can see, even before verification (base name, emoji prefix ignored).
+const ALWAYS_VISIBLE_CHANNELS = ['champ.com'];
+
 const REQUIRED_ENV = [
   'DISCORD_TOKEN',
   'CLIENT_ID',
@@ -76,6 +79,7 @@ module.exports = {
   CHANNELS,
   TICKETS,
   BRAND_COLOR,
+  ALWAYS_VISIBLE_CHANNELS,
   REQUIRED_ENV,
   assertEnv,
 };

@@ -4,7 +4,7 @@ const {
   ChannelType,
   MessageFlags,
 } = require('discord.js');
-const { CHANNELS, VERIFIED_VIEW_ROLE_NAMES } = require('../config');
+const { CHANNELS, VERIFIED_VIEW_ROLE_NAMES, ALWAYS_VISIBLE_CHANNELS } = require('../config');
 const { findRole, baseChannelName } = require('../utils/permissions');
 
 module.exports = {
@@ -28,6 +28,12 @@ module.exports = {
 
       try {
         if (baseChannelName(channel.name) === CHANNELS.verify) {
+          await channel.permissionOverwrites.edit(everyone, { ViewChannel: true });
+          continue;
+        }
+
+        // Stays visible to everyone; its Connect deny is kept because edit() merges overwrites.
+        if (ALWAYS_VISIBLE_CHANNELS.includes(baseChannelName(channel.name))) {
           await channel.permissionOverwrites.edit(everyone, { ViewChannel: true });
           continue;
         }

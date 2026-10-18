@@ -21,6 +21,18 @@ function nameMatches(template, existingName) {
   return existingName === template;
 }
 
+// Builds @everyone overwrites from { allow: [...], deny: [...] } using PermissionFlagsBits names.
+function buildOverwrites(guild, everyone) {
+  if (!everyone) return undefined;
+  return [
+    {
+      id: guild.roles.everyone.id,
+      allow: (everyone.allow ?? []).map((name) => PermissionFlagsBits[name]),
+      deny: (everyone.deny ?? []).map((name) => PermissionFlagsBits[name]),
+    },
+  ];
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-server')
@@ -79,6 +91,7 @@ module.exports = {
             name: channelDef.name.replace('{count}', guild.memberCount),
             type,
             parent: parentId,
+            permissionOverwrites: buildOverwrites(guild, channelDef.everyone),
             reason: 'Created by /setup-server',
           });
           createdChannels++;
