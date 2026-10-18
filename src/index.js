@@ -14,6 +14,7 @@ const ticketPanel = require('./commands/ticket-panel');
 const ticketStats = require('./commands/ticket-stats');
 const ticketUser = require('./commands/ticket-user');
 const ticketClose = require('./commands/ticket-close');
+const deleteRoles = require('./commands/delete-roles');
 
 const ticketHandlers = require('./handlers/ticketInteractions');
 const ticketStore = require('./utils/ticketStore');
@@ -40,6 +41,7 @@ client.commands = new Collection();
 for (const cmd of [
   setupServer,
   setupRoles,
+  deleteRoles,
   ticketPanel,
   ticketStats,
   ticketUser,

@@ -66,6 +66,8 @@ npm start
 |---|---|
 | `/setup-server` | Maakt categorieen/kanalen aan die ontbreken (veilig om te herhalen) |
 | `/setup-roles` | Maakt rollen aan; schakelt auto-rol **Champ** in |
+| `/rollen-verwijderen server bevestig:True` | Verwijdert alle verwijderbare rollen van de server (alleen admins, niet ongedaan te maken) |
+| `/rollen-verwijderen lid gebruiker` | Haalt alle rollen weg bij één lid (alleen admins) |
 | `/ticket-panel [kanaal]` | Plaatst het ticket-paneel (embed + dropdown) |
 | `/ticket-stats` | Statistieken: open/gesloten, gem. beoordeling, top staff (alleen staff) |
 | `/ticket-user` | Iemand toevoegen aan / verwijderen uit dit ticket (alleen staff) |
