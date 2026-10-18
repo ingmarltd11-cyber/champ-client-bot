@@ -1,34 +1,33 @@
-// Eenmalig uitvoeren met: npm run identity
-// Zet de botnaam en profielfoto. Niet in de hoofd-bot zelf, want Discord
-// staat maar een beperkt aantal naam-wijzigingen per uur toe.
+// Run once with: npm run identity
+// Sets the bot username and profile picture. This is kept out of the main bot
+// process because Discord limits how often a username can be changed.
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Events } = require('discord.js');
 
 const BOT_USERNAME = 'Champ Client Bot';
 const AVATAR_PATH = path.join(__dirname, '..', 'assets', 'avatar.jpg');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   try {
     if (client.user.username !== BOT_USERNAME) {
       await client.user.setUsername(BOT_USERNAME);
-      console.log(`Gebruikersnaam ingesteld op "${BOT_USERNAME}".`);
+      console.log(`Username set to "${BOT_USERNAME}".`);
     } else {
-      console.log('Gebruikersnaam staat al goed, niets gewijzigd.');
+      console.log('Username is already correct, nothing changed.');
     }
 
     if (fs.existsSync(AVATAR_PATH)) {
-      const avatar = fs.readFileSync(AVATAR_PATH);
-      await client.user.setAvatar(avatar);
-      console.log('Profielfoto ingesteld.');
+      await client.user.setAvatar(fs.readFileSync(AVATAR_PATH));
+      console.log('Profile picture set.');
     } else {
-      console.log(`Geen afbeelding gevonden op ${AVATAR_PATH}, profielfoto overgeslagen.`);
+      console.log(`No image found at ${AVATAR_PATH}, skipping profile picture.`);
     }
   } catch (err) {
-    console.error('Kon identiteit niet instellen:', err.message);
+    console.error('Could not set identity:', err.message);
   } finally {
     client.destroy();
   }

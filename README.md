@@ -1,94 +1,81 @@
 # Champ Client Bot
 
-Discord-bot (discord.js v14) voor de Champ Client-server. Doet drie dingen:
+Discord bot (discord.js v14, slash commands) for the Champ Client server.
 
-1. **Server-setup** (`/setup-server`) — maakt automatisch de volledige CHAMP-kanaalstructuur aan (categorieen, tekst-/voice-/forumkanalen, member-count kanaal).
-2. **Rollen** (`/setup-roles`) — maakt de rollen **Owner, Developer, Media Manager, Media, Champ+, Support, Champ** aan met bijpassende kleuren. Nieuwe leden krijgen automatisch **Champ**.
-3. **Ticket-systeem** (`/ticket-panel`) — volledig instelbaar ticket-paneel met vragen-formulieren per type, claim/close-knoppen, transcripts (`.txt` + `.html`), beoordelingen met sterren, auto-sluiten bij inactiviteit, ticket-logkanaal en statistieken.
+## Features
 
-Alles is aan te passen via de JSON-bestanden in `config/` — **geen code nodig** om het paneel, ticket-types, vragen of forums te wijzigen.
+- **Verification**: `/setup-verify-gate` hides channels from unverified members; `/setup-verify` posts the green Verify button; `/verify` or the button grants the `champ` role.
+- **Announcements lock**: `/setup-permissions` locks `#announcements`. Only `developer`, `owner`, `media` and `media manager` can post there.
+- **Word filter**: any message containing the whole word `rat` is deleted silently.
+- **Roles delete (admin)**: `/setup-roles-delete` deletes all deletable roles after a confirm button. Channels are never touched.
+- **Tickets**: `/ticket-panel` posts a category menu; each choice opens a private `ticket-<username>` channel. Staff (including `support`) always have access. The opener or staff can close it with confirmation.
+- **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories.
+- **Reviews**: `/review` posts a star rating and description in `#reviews`.
 
-## 1. Installatie
+## Setup
 
 ```bash
 npm install
-cp .env.example .env   # (Windows: kopieer het bestand handmatig)
+cp .env.example .env   # Windows: copy the file manually
 ```
 
-Vul in `.env` in:
-
-| Variabele | Waar vandaan |
+| Variable | Where to get it |
 |---|---|
-| `DISCORD_TOKEN` | Discord Developer Portal -> Bot -> Token |
+| `DISCORD_TOKEN` | Developer Portal -> Bot -> Token |
 | `CLIENT_ID` | Developer Portal -> General Information -> Application ID |
-| `GUILD_ID` | Rechtermuisklik op je server -> Kopieer server-ID (Developer-modus aan) |
+| `GUILD_ID` | Right-click the server -> Copy Server ID (Developer Mode on) |
 | `SUPABASE_URL` | Supabase -> Project Settings -> API |
 | `SUPABASE_SERVICE_KEY` | Supabase -> Project Settings -> API -> `service_role` |
 
-Zonder Supabase-regels werkt de bot gewoon — tickets worden dan lokaal bewaard in `data/tickets.json`.
+### Discord Developer Portal
 
-## 2. Bot uitnodigen
+- Bot -> **Privileged Gateway Intents** -> enable **Message Content Intent** (required by the word filter).
+- Invite the bot with the `bot` and `applications.commands` scopes and at least: Manage Channels, Manage Roles, View Channels, Send Messages, Embed Links, Attach Files, Read Message History.
+- The bot's role must sit above the roles it manages.
 
-Nodig de bot uit met scopes `bot` + `applications.commands` en minimaal:
-Manage Channels, Manage Roles, View Channels, Send Messages, Embed Links, Attach Files, Use Application Commands.
+### Database
 
-## 3. Database (Supabase, aanbevolen)
+Run `supabase/schema.sql` once in the Supabase SQL editor. The bot stores tickets in the `tickets` table.
 
-Draai `supabase/schema.sql` eenmalig in de Supabase SQL-editor. Dat maakt:
-
-- `tickets` — open/gesloten tickets, antwoorden, claims, beoordelingen, transcripts
-- `licenses` — licentiesleutels voor de website-verkoop
-
-Zet daarna `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` in `.env` (en in Railway als env-variabelen).
-
-## 4. Rollen & ID's invullen
-
-- `config/roles.json` — rolnamen, kleuren, `hoist`, `mentionable` en `autoRoleName`.
-- `config/server-structure.json` — categorieen + kanalen (`text`/`voice`/`forum`) en per (sub)item `visibility`. Vul de `roles`-placeholder-ID's met echte rol-ID's; leeg laten = regel overslaan.
-- `config/tickets.json` — `settings.ticketCategoryId` (categorie voor nieuwe tickets) en `settings.logChannelId` (logkanaal). `supportRoleId` per type mag leeg blijven: dan wordt automatisch de **Support**-rol gebruikt.
-
-## 5. Botnaam & profielfoto (eenmalig, al gedaan)
+### Running
 
 ```bash
-npm run identity
-```
-
-## 6. Commands registreren & starten
-
-```bash
-npm run deploy   # eenmalig, en opnieuw na het toevoegen/wijzigen van commands
+npm run deploy    # register slash commands (also runs before each Railway deploy)
 npm start
+npm run identity  # optional, once: set the bot name and profile picture from assets/avatar.jpg
 ```
 
-## 7. Gebruik
+## Commands
 
-| Command | Wat |
-|---|---|
-| `/setup-server` | Maakt categorieen/kanalen aan die ontbreken (veilig om te herhalen) |
-| `/setup-roles` | Maakt rollen aan; schakelt auto-rol **Champ** in |
-| `/ticket-panel [kanaal]` | Plaatst het ticket-paneel (embed + dropdown) |
-| `/ticket-stats` | Statistieken: open/gesloten, gem. beoordeling, top staff (alleen staff) |
-| `/ticket-user` | Iemand toevoegen aan / verwijderen uit dit ticket (alleen staff) |
-| `/ticket-close [reden]` | Ticket sluiten met transcript (opener of staff) |
+| Command | Who | Purpose |
+|---|---|---|
+| `/setup-verify-gate` | Admin | Hide all channels from `@everyone` except `#verify` |
+| `/setup-verify` | Admin | Post the Verify panel in the current channel |
+| `/verify` | Everyone | Get the `champ` role |
+| `/setup-permissions` | Admin | Lock `#announcements` for regular members |
+| `/setup-roles-delete` | Admin | Delete all deletable roles (confirmation required) |
+| `/ticket-panel [channel]` | Admin | Post the ticket panel |
+| `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
+| `/review stars description` | Everyone | Post a review in `#reviews` |
 
-## 8. Online zetten (Railway)
+## Notes
 
-Nieuwe service -> repo `champ-client-bot` koppelen -> env-variabelen invullen -> deploy. `railway.json` regelt de rest (`npm start`).
+- Ticket categories are stored in `data/ticket-categories.json` (git-ignored). Built-in defaults are used when that file does not exist. On hosts with an ephemeral filesystem (such as Railway), runtime changes are lost on redeploy. Re-add them with `/ticket-category`, or move the file to a persistent volume.
+- The `reviews` and `announcements` channel names, the `Tickets` category name and the staff role list are set in `src/config.js`.
 
-## Mapstructuur
+## Project structure
 
 ```
 .
-├── config/               # server-structure, roles, tickets (alles instelbaar zonder code)
-├── supabase/schema.sql   # tickets- + licenties-tabellen
 ├── src/
-│   ├── index.js          # startpunt + event-routing
-│   ├── deploy-commands.js# registreert slash commands
-│   ├── set-identity.js   # eenmalig: naam + avatar
-│   ├── commands/         # setup-server/roles, ticket-panel/stats/user/close
-│   ├── handlers/         # select/modal/claim/close/rating-logica
-│   ├── jobs/autoClose.js # waarschuwt + sluit inactieve tickets
-│   └── utils/            # ticketStore (Supabase/JSON), transcript, log
-├── railway.json / render.yaml
-└── README.md
+│   ├── index.js              # entry point, event and interaction routing
+│   ├── config.js             # role/channel names, env checks, constants
+│   ├── deploy-commands.js    # registers slash commands to GUILD_ID
+│   ├── set-identity.js       # one-off: bot name and avatar
+│   ├── commands/             # one file per slash command
+│   ├── features/             # verify, word filter, tickets
+│   └── utils/                # permissions, supabase client, ticket store/categories
+├── supabase/schema.sql
+├── railway.json
+└── render.yaml
 ```

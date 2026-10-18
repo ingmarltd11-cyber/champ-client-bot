@@ -1,6 +1,6 @@
-# Render blueprint voor de Champ Client Bot.
-# Let op: een Discord-bot draait op Render als "Background Worker"
-# (betaald plan). Zet de env-variabelen in het Render-dashboard.
+# Render blueprint for Champ Client Bot.
+# Note: a Discord bot runs on Render as a "Background Worker" (paid plan).
+# Set the environment variables in the Render dashboard.
 services:
   - type: worker
     name: champ-client-bot

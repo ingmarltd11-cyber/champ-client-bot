@@ -1,10 +1,10 @@
 -- ============================================================
--- Champ Client :: Supabase-schema
--- Draai dit in de Supabase SQL-editor (eenmalig).
--- Tabellen: tickets (Discord-bot) + licenses (website-verkoop).
+-- Champ Client :: Supabase schema
+-- Run this once in the Supabase SQL editor.
+-- Tables: tickets (Discord bot) + licenses (website sales).
 -- ============================================================
 
--- ---------- TICKETS (Discord-bot) ----------
+-- ---------- TICKETS (Discord bot) ----------
 create table if not exists tickets (
   id uuid primary key default gen_random_uuid(),
   channel_id text unique not null,
@@ -27,7 +27,7 @@ create index if not exists tickets_status_idx on tickets (status);
 create index if not exists tickets_user_idx on tickets (user_id);
 create index if not exists tickets_type_idx on tickets (type_id);
 
--- ---------- LICENSES (website-verkoop, Stripe) ----------
+-- ---------- LICENSES (website sales, Stripe) ----------
 create table if not exists licenses (
   id uuid primary key default gen_random_uuid(),
   license_key text unique not null,
@@ -47,8 +47,8 @@ create index if not exists licenses_key_idx on licenses (license_key);
 create index if not exists licenses_discord_idx on licenses (discord_id);
 create index if not exists licenses_status_idx on licenses (status);
 
--- ---------- Beveiliging ----------
--- Alleen server-side toegang via de SERVICE ROLE key (bot + website-backend).
--- Er komen bewust geen publieke policies: anon kan niets lezen of schrijven.
+-- ---------- Security ----------
+-- Only server-side access via the SERVICE ROLE key (bot + website backend).
+-- No public policies on purpose: the anon key cannot read or write anything.
 alter table tickets enable row level security;
 alter table licenses enable row level security;

@@ -5,46 +5,48 @@ const {
   StringSelectMenuBuilder,
   ActionRowBuilder,
   ChannelType,
+  MessageFlags,
 } = require('discord.js');
-const { getTicketConfig } = require('../config/loadConfig');
+const { BRAND_COLOR } = require('../config');
+const { loadCategories } = require('../utils/ticketCategories');
 
-const data = new SlashCommandBuilder()
-  .setName('ticket-panel')
-  .setDescription('Plaats het ticket-paneel in een kanaal')
-  .addChannelOption((opt) =>
-    opt
-      .setName('kanaal')
-      .setDescription('Kanaal om het paneel te plaatsen (standaard: huidig kanaal)')
-      .addChannelTypes(ChannelType.GuildText)
-  )
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('ticket-panel')
+    .setDescription('Post the support ticket panel in a channel.')
+    .addChannelOption((option) =>
+      option
+        .setName('channel')
+        .setDescription('Where to post the panel (default: this channel)')
+        .addChannelTypes(ChannelType.GuildText)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-async function execute(interaction) {
-  const config = getTicketConfig();
-  const target = interaction.options.getChannel('kanaal') || interaction.channel;
+  async execute(interaction) {
+    const categories = loadCategories();
+    const target = interaction.options.getChannel('channel') ?? interaction.channel;
 
-  const embed = new EmbedBuilder()
-    .setTitle(config.panel.title)
-    .setDescription(config.panel.description)
-    .setColor(config.panel.color)
-    .setFooter({ text: config.panel.footer });
+    const embed = new EmbedBuilder()
+      .setTitle('Support Tickets')
+      .setDescription('Choose a category below to open a private ticket with our staff.')
+      .setColor(BRAND_COLOR);
 
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId('ticket-select')
-    .setPlaceholder(config.panel.placeholder || 'Kies een categorie...')
-    .addOptions(
-      config.types.map((t) => ({
-        label: t.label,
-        value: t.id,
-        description: t.description,
-        emoji: t.emoji,
-      }))
-    );
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId('ticket-select')
+      .setPlaceholder('Choose a category...')
+      .addOptions(
+        categories.map((category) => ({
+          label: category.label,
+          value: category.id,
+          description: category.description,
+          emoji: category.emoji,
+        }))
+      );
 
-  const row = new ActionRowBuilder().addComponents(menu);
-
-  await target.send({ embeds: [embed], components: [row] });
-  await interaction.reply({ content: `Paneel geplaatst in ${target}.`, ephemeral: true });
-}
-
-module.exports = { data, execute };
+    await target.send({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(menu)],
+    });
+    await interaction.reply({ content: `✅ Ticket panel posted in ${target}.`, flags: MessageFlags.Ephemeral });
+  },
+};

@@ -1,7 +1,7 @@
 {
   "name": "champ-client-bot",
-  "version": "2.0.0",
-  "description": "Champ Client Discord bot: automatische server-setup + uitgebreid configureerbaar ticket-systeem",
+  "version": "3.0.0",
+  "description": "Champ Client Bot: verification, staff permissions, word filter, ticket system and reviews for the Champ Client server",
   "main": "src/index.js",
   "type": "commonjs",
   "engines": {
