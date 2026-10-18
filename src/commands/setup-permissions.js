@@ -4,7 +4,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { CHANNELS, ANNOUNCEMENT_EXEMPT_ROLE_NAMES } = require('../config');
-const { findRole } = require('../utils/permissions');
+const { findRole, findChannel } = require('../utils/permissions');
 
 const LOCKED_FOR_EVERYONE = {
   SendMessages: false,
@@ -31,9 +31,7 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const { guild } = interaction;
-    const channel = guild.channels.cache.find(
-      (c) => c.name === CHANNELS.announcements && c.isTextBased()
-    );
+    const channel = findChannel(guild, CHANNELS.announcements);
     if (!channel) {
       return interaction.editReply({
         content: `❌ No channel named #${CHANNELS.announcements} was found.`,

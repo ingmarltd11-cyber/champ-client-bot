@@ -5,7 +5,7 @@ const {
   MessageFlags,
 } = require('discord.js');
 const { CHANNELS, VERIFIED_VIEW_ROLE_NAMES } = require('../config');
-const { findRole } = require('../utils/permissions');
+const { findRole, baseChannelName } = require('../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -27,7 +27,7 @@ module.exports = {
       if (channel.type === ChannelType.GuildCategory) continue;
 
       try {
-        if (channel.name === CHANNELS.verify) {
+        if (baseChannelName(channel.name) === CHANNELS.verify) {
           await channel.permissionOverwrites.edit(everyone, { ViewChannel: true });
           continue;
         }
