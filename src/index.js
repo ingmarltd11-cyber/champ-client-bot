@@ -56,10 +56,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket-select') {
-      return tickets.handleSelect(interaction);
-    }
-
     if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket-form:')) {
       return tickets.handleFormSubmit(interaction);
     }
@@ -68,6 +64,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const id = interaction.customId;
 
       if (id === 'verify-button') return respondVerified(interaction);
+      if (id.startsWith('ticket-open:')) return tickets.handleOpen(interaction);
       if (id === 'ticket-close') return tickets.requestClose(interaction);
       if (id === 'ticket-close-confirm') return tickets.confirmClose(interaction);
       if (id === 'ticket-close-cancel') {

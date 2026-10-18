@@ -2,15 +2,37 @@ const {
   SlashCommandBuilder,
   PermissionFlagsBits,
   EmbedBuilder,
-  StringSelectMenuBuilder,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   MessageFlags,
 } = require('discord.js');
 const { BRAND_COLOR } = require('../config');
 const { loadCategories } = require('../utils/ticketCategories');
 
+const BUTTONS_PER_ROW = 5;
+
+// One button per category. Discord allows 5 rows of 5 buttons, which matches the 25-category limit.
+function buildRows(categories) {
+  const rows = [];
+  for (let i = 0; i < categories.length; i += BUTTONS_PER_ROW) {
+    const buttons = categories.slice(i, i + BUTTONS_PER_ROW).map((category) => {
+      const button = new ButtonBuilder()
+        .setCustomId(`ticket-open:${category.id}`)
+        .setLabel(category.label.slice(0, 80))
+        .setStyle(ButtonStyle.Primary);
+      if (category.emoji) button.setEmoji(category.emoji);
+      return button;
+    });
+    rows.push(new ActionRowBuilder().addComponents(buttons));
+  }
+  return rows;
+}
+
 module.exports = {
+  buildRows,
+
   data: new SlashCommandBuilder()
     .setName('ticket-panel')
     .setDescription('Post the support ticket panel in a channel.')
@@ -28,25 +50,10 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setTitle('Support Tickets')
-      .setDescription('Choose a category below to open a private ticket with our staff.')
+      .setDescription('Click a button below to open a private ticket with our staff.')
       .setColor(BRAND_COLOR);
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId('ticket-select')
-      .setPlaceholder('Choose a category...')
-      .addOptions(
-        categories.map((category) => ({
-          label: category.label,
-          value: category.id,
-          description: category.description,
-          emoji: category.emoji,
-        }))
-      );
-
-    await target.send({
-      embeds: [embed],
-      components: [new ActionRowBuilder().addComponents(menu)],
-    });
+    await target.send({ embeds: [embed], components: buildRows(categories) });
     await interaction.reply({ content: `✅ Ticket panel posted in ${target}.`, flags: MessageFlags.Ephemeral });
   },
 };

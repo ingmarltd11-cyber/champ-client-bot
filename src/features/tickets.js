@@ -32,6 +32,7 @@ const STAFF_ACCESS = [
 // The opener ID is stored in the channel topic so it survives restarts.
 const OPENER_PATTERN = /ticket-opener:(\d+)/;
 const FORM_PREFIX = 'ticket-form:';
+const OPEN_PREFIX = 'ticket-open:';
 
 function staffOverwrites(guild) {
   // The support role is always included, so it always has ticket access.
@@ -164,8 +165,9 @@ async function createTicket(interaction, category, answers) {
   }
 }
 
-async function handleSelect(interaction) {
-  const category = loadCategories().find((c) => c.id === interaction.values[0]);
+async function handleOpen(interaction) {
+  const categoryId = interaction.customId.slice(OPEN_PREFIX.length);
+  const category = loadCategories().find((c) => c.id === categoryId);
   if (!category) {
     return interaction.reply({
       content: '❌ This ticket category no longer exists. Ask staff to repost the panel.',
@@ -266,4 +268,4 @@ async function confirmClose(interaction) {
   }, seconds * 1000);
 }
 
-module.exports = { handleSelect, handleFormSubmit, requestClose, confirmClose };
+module.exports = { handleOpen, handleFormSubmit, requestClose, confirmClose };
