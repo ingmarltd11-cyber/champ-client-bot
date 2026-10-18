@@ -88,9 +88,8 @@ function words(text) {
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word));
 }
 
-// Returns the knowledge that matters for this question, or the start of the docs when nothing matches.
-function getContext(question) {
-  const chunks = loadChunks();
+// Ranks chunks by how many meaningful words they share with the question.
+function pickChunks(chunks, question, limit = MAX_CHARS) {
   if (chunks.length === 0) return '';
 
   const asked = new Set(words(question));
@@ -115,10 +114,15 @@ function getContext(question) {
   if (scored.length === 0) {
     for (const chunk of chunks) add(chunk, FALLBACK_CHARS);
   } else {
-    for (const { chunk } of scored) add(chunk, MAX_CHARS);
+    for (const { chunk } of scored) add(chunk, limit);
   }
 
-  return picked.join('\n\n').slice(0, MAX_CHARS);
+  return picked.join('\n\n').slice(0, limit);
+}
+
+// Returns the knowledge that matters for this question, or the start of the docs when nothing matches.
+function getContext(question) {
+  return pickChunks(loadChunks(), question);
 }
 
 // Test helper: forget the cached files.
@@ -126,4 +130,4 @@ function resetCache() {
   cache = { key: '', chunks: [] };
 }
 
-module.exports = { getContext, resetCache, FOLDERS };
+module.exports = { getContext, pickChunks, splitIntoChunks, resetCache, FOLDERS, MAX_CHARS };

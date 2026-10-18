@@ -42,7 +42,7 @@ client.once(Events.ClientReady, (readyClient) => {
   console.log(describeCategoryStorage());
   console.log(
     AI.apiKey
-      ? `AI support: on (${AI.model}, knowledge: website + mod)`
+      ? `AI support: on (${AI.model}, site pages: ${AI.siteUrls.length}, knowledge: website + mod)`
       : 'AI support: off (no AI_API_KEY)'
   );
 

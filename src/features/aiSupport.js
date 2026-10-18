@@ -1,6 +1,12 @@
 const { AI, ROLES } = require('../config');
 const { findRole, isStaff } = require('../utils/permissions');
-const { getContext } = require('./knowledge');
+const {
+  getContext: getFolderContext,
+  splitIntoChunks,
+  pickChunks,
+  MAX_CHARS: MAX_CONTEXT_CHARS,
+} = require('./knowledge');
+const webKnowledge = require('./webKnowledge');
 
 const OPENER_PATTERN = /ticket-opener:(\d+)/;
 
@@ -143,11 +149,23 @@ function shouldHandle(message) {
   return true;
 }
 
-function buildMessages(message, question) {
-  const knowledge = getContext(question);
+async function buildMessages(message, question) {
+  // Website pages first, then the local folders, both only when they have something relevant.
+  const web = await webKnowledge
+    .getContext(question, { splitIntoChunks, pickChunks })
+    .catch((err) => {
+      console.error('Could not read the website:', err.message);
+      return '';
+    });
+  const knowledge = [web, getFolderContext(question)]
+    .filter(Boolean)
+    .join('\n\n')
+    .slice(0, MAX_CONTEXT_CHARS);
   const system = [
     RULES,
-    knowledge ? `\nKennisbank:\n${knowledge}` : '\nDe kennisbank is leeg. Twijfel je? Antwoord met alleen ESCALATE.',
+    knowledge
+      ? `\nKennisbank (website en eigen documenten):\n${knowledge}`
+      : '\nEr is geen informatie beschikbaar. Antwoord met alleen ESCALATE.',
   ].join('\n');
 
   return [
@@ -232,7 +250,7 @@ async function handleMessage(message) {
     if (typeof channel.sendTyping === 'function') await channel.sendTyping().catch(() => {});
 
     countCall();
-    const raw = await callModel(buildMessages(message, question));
+    const raw = await callModel(await buildMessages(message, question));
     const withoutCode = stripCode(raw);
 
     // The model produced code or a link to code: refuse instead of sending it.

@@ -61,6 +61,11 @@ const AI = {
   model: process.env.AI_MODEL ?? 'openai/gpt-oss-20b',
   // Optional override for the knowledge folders (default: ./knowledge).
   knowledgeDir: process.env.AI_KNOWLEDGE_DIR ?? '',
+  // Website pages the assistant may read, comma separated. Only these URLs are fetched.
+  siteUrls: (process.env.AI_SITE_URLS ?? '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean),
   // Staying under the free tier: a few calls per minute and per ticket.
   maxCallsPerMinute: 5,
   maxRepliesPerTicket: 6,
