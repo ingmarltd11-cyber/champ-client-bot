@@ -19,6 +19,44 @@ const STOPWORDS = new Set([
   'why', 'when', 'where', 'which', 'i', 'you', 'my', 'your', 'can', 'do', 'does', 'it', 'this', 'that',
 ]);
 
+// The site is English while most questions are Dutch, so both spellings are matched.
+const SYNONYMS = {
+  licentie: ['license', 'licence', 'key'],
+  licenties: ['license', 'licence'],
+  sleutel: ['key'],
+  prijs: ['price', 'pricing', 'cost'],
+  kost: ['cost', 'price'],
+  kosten: ['cost', 'price'],
+  kopen: ['buy', 'purchase', 'checkout'],
+  betaling: ['payment', 'checkout', 'stripe'],
+  betalen: ['payment', 'checkout', 'stripe'],
+  betaald: ['payment'],
+  downloaden: ['download'],
+  gedownload: ['download'],
+  installeren: ['install', 'setup'],
+  installatie: ['install', 'setup'],
+  crasht: ['crash'],
+  crash: ['crash'],
+  vast: ['freeze', 'crash'],
+  verbinden: ['connect', 'login'],
+  inloggen: ['login', 'sign'],
+  account: ['account'],
+  wachtwoord: ['password', 'reset'],
+  veilig: ['safe'],
+  virus: ['antivirus', 'virus'],
+  antivirus: ['antivirus'],
+  hulp: ['support', 'help'],
+  ondersteuning: ['support'],
+  update: ['update'],
+  vernieuwen: ['renew', 'update'],
+  geldig: ['valid'],
+  dashboard: ['dashboard'],
+  features: ['features'],
+  functies: ['features'],
+  base: ['base', 'finds'],
+  vinden: ['find', 'finds'],
+};
+
 let cache = { key: '', chunks: [] };
 
 function baseDir() {
@@ -48,17 +86,38 @@ function fileSignature(files) {
     .join('|');
 }
 
-// Splits on headings and blank lines, so each chunk stays about one subject.
+// Splits on headings and blank lines, then merges the short pieces: a web page turns into
+// many one-line fragments otherwise, and a whole answer can hide in a fragment too small to match.
+const TARGET_CHUNK = 900;
+const MIN_HEADING_BREAK = 120;
+const MIN_CHUNK = 20;
+
 function splitIntoChunks(text, source) {
   const parts = String(text)
     .split(/\n(?=#{1,3}\s)|\n\s*\n/)
     .map((part) => part.trim())
     .filter(Boolean);
 
-  return parts.map((part) => {
-    const titleMatch = /^#{1,3}\s+(.+)$/m.exec(part);
-    return { source, title: titleMatch ? titleMatch[1].trim() : source, text: part };
-  });
+  const merged = [];
+  let buffer = '';
+
+  for (const part of parts) {
+    const isHeading = /^#{1,3}\s/.test(part);
+    const overflows = buffer.length + part.length + 2 > TARGET_CHUNK;
+    if (buffer && (overflows || (isHeading && buffer.length >= MIN_HEADING_BREAK))) {
+      merged.push(buffer);
+      buffer = '';
+    }
+    buffer = buffer ? `${buffer}\n\n${part}` : part;
+  }
+  if (buffer) merged.push(buffer);
+
+  return merged
+    .filter((chunk) => chunk.length >= MIN_CHUNK)
+    .map((chunk) => {
+      const titleMatch = /^#{1,3}\s+(.+)$/m.exec(chunk);
+      return { source, title: titleMatch ? titleMatch[1].trim() : source, text: chunk };
+    });
 }
 
 function loadChunks() {
@@ -81,11 +140,17 @@ function loadChunks() {
 }
 
 function words(text) {
-  return String(text)
+  const base = String(text)
     .toLowerCase()
     .replace(/[^a-z0-9à-ÿ\s-]/g, ' ')
     .split(/\s+/)
     .filter((word) => word.length >= 3 && !STOPWORDS.has(word));
+
+  const expanded = new Set(base);
+  for (const word of base) {
+    for (const synonym of SYNONYMS[word] ?? []) expanded.add(synonym);
+  }
+  return [...expanded];
 }
 
 // Ranks chunks by how many meaningful words they share with the question.
