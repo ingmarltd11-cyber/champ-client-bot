@@ -59,13 +59,12 @@ const AI = {
   apiKey: process.env.AI_API_KEY ?? '',
   baseUrl: (process.env.AI_BASE_URL ?? 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
   model: process.env.AI_MODEL ?? 'openai/gpt-oss-20b',
-  // Ticket categories (by id or label, lowercase) where the assistant is allowed to answer.
-  ticketTypes: (process.env.AI_TICKET_TYPES ?? 'website,mod')
-    .split(',')
-    .map((name) => name.trim().toLowerCase())
-    .filter(Boolean),
-  maxRepliesPerTicket: 10,
-  cooldownMs: 8000,
+  // Optional override for the knowledge folders (default: ./knowledge).
+  knowledgeDir: process.env.AI_KNOWLEDGE_DIR ?? '',
+  // Staying under the free tier: a few calls per minute and per ticket.
+  maxCallsPerMinute: 5,
+  maxRepliesPerTicket: 6,
+  cooldownMs: 10000,
   timeoutMs: 20000,
   maxAnswerChars: 1200,
 };

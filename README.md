@@ -66,7 +66,9 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 ## AI support in tickets
 
-The assistant answers the ticket opener in tickets whose category is `website` or `mod`. It never gives code, never explains where to get code, and never links to code hosting. When it is unsure, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
+The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It never gives code, never explains where to get code, and never links to code hosting. When it is unsure, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
+
+Its answers come only from the files in `knowledge/website/` and `knowledge/mod/`. Add `.md` or `.txt` files there; sections are matched to the question, so keep one subject per `##` heading. See `knowledge/README.md`.
 
 Set these variables (Railway → Variables):
 
@@ -75,7 +77,7 @@ Set these variables (Railway → Variables):
 | `AI_API_KEY` | yes, to enable | Key from Groq or Google AI Studio |
 | `AI_BASE_URL` | no | Defaults to `https://api.groq.com/openai/v1`. For Gemini use `https://generativelanguage.googleapis.com/v1beta/openai` |
 | `AI_MODEL` | no | Defaults to `openai/gpt-oss-20b`. For Gemini use e.g. `gemini-3.5-flash-lite` |
-| `AI_TICKET_TYPES` | no | Comma-separated category ids or labels, defaults to `website,mod` |
+| `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
 Any OpenAI-compatible endpoint works, because the bot only calls `/chat/completions`.
 
