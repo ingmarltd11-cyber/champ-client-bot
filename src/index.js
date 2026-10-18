@@ -11,6 +11,7 @@ const { assertEnv, REQUIRED_ENV } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
 const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
+const aiSupport = require('./features/aiSupport');
 const { isAdmin } = require('./utils/permissions');
 const { registerCommands } = require('./utils/registerCommands');
 const { respondVerified } = require('./features/verify');
@@ -47,6 +48,9 @@ client.once(Events.ClientReady, (readyClient) => {
 
 client.on(Events.MessageCreate, (message) => {
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
+
+  // Answers only in website/mod tickets, only for the opener, and never gives code.
+  aiSupport.handleMessage(message).catch((err) => console.error('AI support failed:', err));
 });
 
 client.on(Events.MessageUpdate, (_oldMessage, message) => {

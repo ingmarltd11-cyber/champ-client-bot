@@ -53,6 +53,23 @@ const TICKETS = {
   buttonColors: { close: 'red', accept: 'red', deny: 'grey' },
 };
 
+// Support assistant in ticket channels. Without AI_API_KEY it stays off and the bot works as before.
+// Works with any OpenAI-compatible endpoint: Groq (default) or Gemini's /openai/ layer.
+const AI = {
+  apiKey: process.env.AI_API_KEY ?? '',
+  baseUrl: (process.env.AI_BASE_URL ?? 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
+  model: process.env.AI_MODEL ?? 'openai/gpt-oss-20b',
+  // Ticket categories (by id or label, lowercase) where the assistant is allowed to answer.
+  ticketTypes: (process.env.AI_TICKET_TYPES ?? 'website,mod')
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean),
+  maxRepliesPerTicket: 10,
+  cooldownMs: 8000,
+  timeoutMs: 20000,
+  maxAnswerChars: 1200,
+};
+
 const BRAND_COLOR = 0x9b59b6;
 
 // Channels every member can see, even before verification (base name, emoji prefix ignored).
@@ -80,6 +97,7 @@ module.exports = {
   VERIFIED_VIEW_ROLE_NAMES,
   CHANNELS,
   TICKETS,
+  AI,
   BRAND_COLOR,
   ALWAYS_VISIBLE_CHANNELS,
   REQUIRED_ENV,

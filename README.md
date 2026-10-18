@@ -64,6 +64,21 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 - Ticket categories are stored in `data/ticket-categories.json` (git-ignored). Built-in defaults are used when that file does not exist. On Railway the container filesystem is wiped on every deploy, so without a volume the settings reset to the defaults. To keep them: in Railway, add a **Volume** to the service with mount path `/data`, then set the variable `DATA_DIR=/data`. The bot logs `Ticket categories: ... loaded from ...` at startup, so you can confirm which file it uses.
 - The `reviews` and `announcements` channel names, the `Tickets` category name and the staff role list are set in `src/config.js`.
 
+## AI support in tickets
+
+The assistant answers the ticket opener in tickets whose category is `website` or `mod`. It never gives code, never explains where to get code, and never links to code hosting. When it is unsure, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
+
+Set these variables (Railway → Variables):
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `AI_API_KEY` | yes, to enable | Key from Groq or Google AI Studio |
+| `AI_BASE_URL` | no | Defaults to `https://api.groq.com/openai/v1`. For Gemini use `https://generativelanguage.googleapis.com/v1beta/openai` |
+| `AI_MODEL` | no | Defaults to `openai/gpt-oss-20b`. For Gemini use e.g. `gemini-3.5-flash-lite` |
+| `AI_TICKET_TYPES` | no | Comma-separated category ids or labels, defaults to `website,mod` |
+
+Any OpenAI-compatible endpoint works, because the bot only calls `/chat/completions`.
+
 ## Project structure
 
 ```
@@ -74,7 +89,7 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 │   ├── deploy-commands.js    # registers slash commands to GUILD_ID
 │   ├── set-identity.js       # one-off: bot name and avatar
 │   ├── commands/             # one file per slash command
-│   ├── features/             # verify, word filter, tickets
+│   ├── features/             # verify, word filter, tickets, AI support
 │   └── utils/                # permissions, supabase client, ticket store/categories
 ├── supabase/schema.sql
 ├── railway.json
