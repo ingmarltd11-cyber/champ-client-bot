@@ -371,6 +371,60 @@ async function callModel(messages, { withTools = false } = {}) {
   }
 }
 
+// Asks the website's support endpoint. Both the website and Discord use that one engine,
+// so the same question gets the same answer. Returns null when it is unavailable.
+async function askWebsite(message, question) {
+  if (!AI.supportApiUrl) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const response = await fetch(`${AI.supportApiUrl}/api/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: question.slice(0, 2000),
+        channel: 'discord',
+        session_id: message.channel?.id,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.error(`Website AI returned ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    const reply = String(data.reply ?? '').trim();
+    if (!reply) return null;
+
+    return {
+      reply: reply.slice(0, AI.maxAnswerChars),
+      needsEscalation: Boolean(data.needs_escalation),
+    };
+  } catch (err) {
+    console.error('Website AI request failed:', err.message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Hands the conversation to support when the shared assistant cannot answer.
+async function pingSupport(channel, guild) {
+  const supportRole = findRole(guild, ROLES.support);
+  if (!supportRole) return;
+  if (isTicketChannel(channel)) handled.add(channel.id);
+
+  await channel
+    .send({
+      content: `${supportRole} can help you further.`,
+      allowedMentions: { roles: [supportRole.id] },
+    })
+    .catch((err) => console.error('Could not ping support:', err.message));
+}
+
 async function escalate(channel, guild, reason) {
   // In a ticket the assistant stays quiet afterwards; in a normal channel it may be asked again.
   if (isTicketChannel(channel)) handled.add(channel.id);
@@ -394,11 +448,6 @@ async function handleMessage(message) {
     if (message.guild && !message.author?.bot) {
       if (isTicketChannel(message.channel) || isMentioned(message)) logSkip(message, reason);
     }
-    return;
-  }
-
-  if (!hasBudget()) {
-    logSkip(message, 'the per-minute call limit was reached');
     return;
   }
 
@@ -431,11 +480,28 @@ async function handleMessage(message) {
     }
   }
 
+  // Everyone else is answered by the website's engine, so both channels say the same thing.
+  if (!trusted) {
+    const shared = await askWebsite(message, question);
+    if (shared) {
+      const reply = hideHiddenHosts(shared.reply);
+      if (reply && !looksLikeCode(reply) && !containsCodeHost(reply)) {
+        await channel.send({ content: reply, allowedMentions: { parse: [] } }).catch(() => {});
+        if (shared.needsEscalation) await pingSupport(channel, message.guild);
+        return;
+      }
+    }
+  }
+
   try {
     if (typeof channel.sendTyping === 'function') await channel.sendTyping().catch(() => {});
 
-    const messages = await buildMessages(message, question, trusted);
+    if (!hasBudget()) {
+      logSkip(message, 'the per-minute call limit was reached');
+      return;
+    }
 
+    const messages = await buildMessages(message, question, trusted);
     countCall();
     let response = await callModel(messages, { withTools: trusted });
     const performed = [];

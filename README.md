@@ -75,7 +75,9 @@ It also treats `champclient.com` (and every spelling of it) as non-existent: the
 
 The one hard limit: it never gives code, never explains how to get code, and never links to code hosting. A code question is refused before the model is even called. When a product detail is missing from the knowledge base, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
 
-Its answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
+The website runs the shared answer engine: Discord sends its questions to `https://champ-site-psi.vercel.app/api/ai/chat` (override with `SUPPORT_API_URL`), so the website chat and the bot answer from the same model and knowledge. When that endpoint is unavailable the bot falls back to its own model, which is also what powers the trusted-user actions. The website's model key lives in Vercel as `GROQ_API_KEY` or `AI_API_KEY`; the bot's `AI_API_KEY` is only used for the fallback.
+
+Its fallback answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
 
 Set these variables (Railway → Variables):
 
@@ -89,6 +91,7 @@ Set these variables (Railway → Variables):
 | `AI_TRUSTED_USERS` | no | Discord usernames allowed to make the assistant act, defaults to `sora_developing,silvan` |
 | `AI_TRUSTED_USER_IDS` | no | User IDs allowed to act, comma separated. Safer than usernames; use this when an account is renamed |
 | `AI_MAX_CALLS_PER_MINUTE` | no | Model calls per minute, defaults to `10`. An action uses two calls |
+| `SUPPORT_API_URL` | no | Website that runs the shared assistant, defaults to `https://champ-site-psi.vercel.app`. Empty disables the shared engine |
 | `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
 Any OpenAI-compatible endpoint works, because the bot only calls `/chat/completions`.

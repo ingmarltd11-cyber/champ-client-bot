@@ -76,6 +76,11 @@ const AI = {
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean),
+  // The website runs the shared assistant. Discord sends its questions there, so both
+  // channels get the same answer from the same model and knowledge. Empty disables it.
+  supportApiUrl: (process.env.SUPPORT_API_URL ?? 'https://champ-site-psi.vercel.app')
+    .trim()
+    .replace(/\/+$/, ''),
   // Domains the assistant must never mention or link. Removed from the knowledge, the
   // question and the answer, and replaced with the official website.
   hiddenHosts: (process.env.AI_HIDDEN_HOSTS ?? 'champclient.com')
