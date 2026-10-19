@@ -70,7 +70,7 @@ client.on(Events.MessageCreate, (message) => {
 
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
 
-  // Answers normal questions in tickets (the opener) and when mentioned, but never gives code.
+  // Only answers when the bot is pinged (including in tickets), and never gives code.
   aiSupport.handleMessage(message).catch((err) => console.error('AI support failed:', err));
 });
 
