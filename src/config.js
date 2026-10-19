@@ -66,6 +66,12 @@ const AI = {
     .split(',')
     .map((url) => url.trim())
     .filter(Boolean),
+  // Domains the assistant must never mention or link. Removed from the knowledge, the
+  // question and the answer, and replaced with the official website.
+  hiddenHosts: (process.env.AI_HIDDEN_HOSTS ?? 'champclient.com')
+    .split(',')
+    .map((host) => host.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').replace(/^www\./i, ''))
+    .filter(Boolean),
   // Staying under the free tier: a few calls per minute and per ticket.
   maxCallsPerMinute: 5,
   maxRepliesPerTicket: 6,

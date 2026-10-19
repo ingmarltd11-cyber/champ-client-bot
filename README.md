@@ -69,6 +69,8 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It answers normal questions, small talk and general knowledge questions as well as product questions, and it remembers the last few messages of the channel so follow-up questions still make sense. Asking about modules or features gets a link to the features page of the configured website straight away (taken from the crawled pages, so `features.html` or `/features` both work).
 
+It also treats `champclient.com` (and every spelling of it) as non-existent: the domain is removed from the crawled pages, from the question and from its own answer, and replaced with the official website. So it can never mention or link it.
+
 The one hard limit: it never gives code, never explains how to get code, and never links to code hosting. A code question is refused before the model is even called. When a product detail is missing from the knowledge base, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
 
 Its answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
@@ -81,6 +83,7 @@ Set these variables (Railway → Variables):
 | `AI_BASE_URL` | no | Defaults to `https://api.groq.com/openai/v1`. For Gemini use `https://generativelanguage.googleapis.com/v1beta/openai` |
 | `AI_MODEL` | no | Defaults to `openai/gpt-oss-20b`. For Gemini use e.g. `gemini-3.5-flash-lite` |
 | `AI_SITE_URLS` | recommended | Comma-separated website pages to read, e.g. `https://example.com/support,https://example.com/faq` |
+| `AI_HIDDEN_HOSTS` | no | Domains the assistant must never mention, defaults to `champclient.com`. Comma separated; every mention is replaced with the official website |
 | `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
 Any OpenAI-compatible endpoint works, because the bot only calls `/chat/completions`.
