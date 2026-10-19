@@ -46,15 +46,21 @@ const CODE_REQUEST =
 const FEATURES_REQUEST =
   /\b(modules?|features?|functies?|functionaliteit\w*|capabilit\w*|what\s+can\s+(it|this|the\s+(mod|client|cheat|menu))\s+do|what\s+does\s+(it|the\s+(mod|client))\s+(do|include|have)|what(?:'s|\s+is)\s+included|wat\s+kan\s+(het|deze|de\s+(mod|client))|wat\s+zit\s+er\s+in|welke\s+(modules?|features?|functies?))\b/i;
 
-// The features page, derived from the configured website. Empty when no website is configured.
-function featuresUrl() {
-  const seed = AI.siteUrls[0];
-  if (!seed) return '';
-  try {
-    return `${new URL(seed).origin}/features`;
-  } catch {
+// The features page of the configured website, taken from the crawled pages, so its real
+// file name (features.html, /features, ...) is used instead of a guessed path.
+let cachedFeaturesUrl;
+
+async function featuresUrl() {
+  if (cachedFeaturesUrl !== undefined) return cachedFeaturesUrl;
+  if (AI.siteUrls.length === 0) {
+    cachedFeaturesUrl = '';
     return '';
   }
+
+  const pages = await webKnowledge.loadPages();
+  const page = pages.find((entry) => /feature|functie/i.test(`${entry.url} ${entry.title ?? ''}`));
+  cachedFeaturesUrl = page ? page.url : '';
+  return cachedFeaturesUrl;
 }
 
 // A feature request is a suggestion, not a question about what the client can do.
@@ -64,8 +70,8 @@ function wantsFeatures(question) {
   return !asksForSuggestion && FEATURES_REQUEST.test(question);
 }
 
-function featuresAnswer() {
-  const url = featuresUrl();
+async function featuresAnswer() {
+  const url = await featuresUrl();
   if (!url) return '';
   return [
     '📄 **Features and modules**',
@@ -339,7 +345,7 @@ async function handleMessage(message) {
 
   // Module and feature questions get the features page, without spending a model call.
   if (wantsFeatures(question)) {
-    const answer = featuresAnswer();
+    const answer = await featuresAnswer();
     if (answer) {
       await channel.send({ content: answer, allowedMentions: { parse: [] } }).catch(() => {});
       return;
@@ -379,6 +385,7 @@ async function handleMessage(message) {
 
 // Test helper: forget per-channel state.
 function resetState() {
+  cachedFeaturesUrl = undefined;
   replies.clear();
   handled.clear();
   lastSkipLog.clear();
