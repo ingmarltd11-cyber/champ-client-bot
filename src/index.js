@@ -64,7 +64,7 @@ client.on(Events.MessageCreate, (message) => {
 
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
 
-  // Answers only in website/mod tickets, only for the opener, and never gives code.
+  // Answers normal questions in tickets (the opener) and when mentioned, but never gives code.
   aiSupport.handleMessage(message).catch((err) => console.error('AI support failed:', err));
 });
 

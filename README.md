@@ -54,6 +54,7 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/verify` | Everyone | Get the `champ` role |
 | `/setup-permissions` | Admin | Lock `#announcements` for regular members |
 | `/setup-roles-delete` | Admin | Delete all deletable roles (confirmation required) |
+| `/server-setup-chanel-create categorie naam [emoji]` | Admin | Create a channel in the server style (`emoji│name`) inside a category, creating the category when needed |
 | `/ticket-panel [channel]` | Admin | Post the ticket panel |
 | `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
 | `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
@@ -66,7 +67,9 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 ## AI support in tickets
 
-The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It never gives code, never explains where to get code, and never links to code hosting. When it is unsure, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
+The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It answers normal questions, small talk and general knowledge questions as well as product questions, and it remembers the last few messages of the channel so follow-up questions still make sense. Asking about modules or features gets a link to the `/features` page of the configured website straight away.
+
+The one hard limit: it never gives code, never explains how to get code, and never links to code hosting. A code question is refused before the model is even called. When a product detail is missing from the knowledge base, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
 
 Its answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
 
