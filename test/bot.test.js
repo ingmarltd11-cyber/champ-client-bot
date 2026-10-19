@@ -230,6 +230,14 @@ test('a trusted user can run read-only tools and get a real result', async () =>
   assert.match(optionsResult.text, /general-support/);
 });
 
+test('member search without the members intent explains the fix', async () => {
+  const guild = {
+    client: { options: { intents: { has: () => false } } },
+    members: { cache: new Collection(), fetch: async () => null },
+  };
+  await assert.rejects(() => aiTools.resolveMember(guild, 'unknown-name'), /Server Members Intent/);
+});
+
 test('a failed destructive action returns an error instead of throwing', async () => {
   const message = {
     author: { bot: false, username: 'sora_developing' },

@@ -1,4 +1,4 @@
-const { ChannelType, PermissionFlagsBits } = require('discord.js');
+const { ChannelType, Collection, GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const { baseChannelName, findRole, normalizeName } = require('../utils/permissions');
 const { isTrustedUser } = require('../utils/trustedUsers');
 const {
@@ -531,6 +531,12 @@ function channelError(guild, value) {
   return `No text channel matches "${clean(value)}". Available: ${names}.`;
 }
 
+// The member list/search endpoints need the privileged Server Members Intent. With the intent
+// off, names are matched against the cache (message authors and the bot) and IDs still work.
+function hasMemberIntent(guild) {
+  return Boolean(guild.client?.options?.intents?.has?.(GatewayIntentBits.GuildMembers));
+}
+
 async function resolveMember(guild, value) {
   const wanted = clean(value);
   if (!wanted) return null;
@@ -550,6 +556,13 @@ async function resolveMember(guild, value) {
       member.user.id === wanted
   );
   if (cached) return cached;
+
+  if (!hasMemberIntent(guild)) {
+    throw new Error(
+      'I cannot search members by name because the Server Members Intent is off. ' +
+        'Mention the member or use their user ID, or set ENABLE_GUILD_MEMBERS_INTENT=true (and enable the intent in the Discord Developer Portal).'
+    );
+  }
 
   // Partial matches, for "sora" instead of the full username.
   const results = await guild.members
@@ -1065,21 +1078,43 @@ function listRoles(message) {
 
 async function listMembers(message, args) {
   const limit = Math.min(Math.max(Number(args.limit) || 25, 1), 100);
+  const search = clean(args.search);
+  const canSearch = hasMemberIntent(message.guild);
+
   let members;
-  if (args.search) {
-    members = await message.guild.members.fetch({ query: clean(args.search), limit }).catch(() => null);
+  if (search && canSearch) {
+    members = await message.guild.members.fetch({ query: search, limit }).catch(() => null);
   } else {
-    members = await message.guild.members.fetch({ limit }).catch(() => null);
+    // Cache-only fallback works without the privileged intent, but it only knows members
+    // the bot has seen. Filtering by the search term happens locally.
+    members = message.guild.members.cache;
+    if (search) {
+      const needle = normalizeName(search);
+      members = new Collection(
+        [...members.values()]
+          .filter(
+            (member) =>
+              normalizeName(member.user.username).includes(needle) ||
+              normalizeName(member.displayName).includes(needle) ||
+              member.id === search
+          )
+          .map((member) => [member.id, member])
+      );
+    }
   }
+
   if (!members || members.size === 0) return { text: 'No members found.' };
 
-  const lines = [...members.values()].map(
+  const lines = [...members.values()].slice(0, limit).map(
     (member) =>
       `${member.id} | ${member.user.tag} | display: ${member.displayName} | roles: ${
         member.roles.cache.filter((role) => role.id !== message.guild.id).map((role) => role.name).join(', ') || 'none'
       }`
   );
-  return { text: `Members (${lines.length}):\n${lines.join('\n')}` };
+  const note = canSearch
+    ? ''
+    : '\n(Only members the bot has seen are listed. Set ENABLE_GUILD_MEMBERS_INTENT=true for a full list.)';
+  return { text: `Members (${lines.length}):\n${lines.join('\n')}${note}` };
 }
 
 function describeCategories(categories) {

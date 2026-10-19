@@ -31,8 +31,9 @@ cp .env.example .env   # Windows: copy the file manually
 ### Discord Developer Portal
 
 - Bot -> **Privileged Gateway Intents** -> enable **Message Content Intent** (required by the word filter).
-- Invite the bot with the `bot` and `applications.commands` scopes and at least: Manage Channels, Manage Roles, View Channels, Send Messages, Embed Links, Attach Files, Read Message History.
-- The bot's role must sit above the roles it manages.
+- Optional: enable **Server Members Intent** and set `ENABLE_GUILD_MEMBERS_INTENT=true` so the admin AI can list/search members by name. Without it, names are matched against the member cache and mentions/user IDs still work.
+- Invite the bot with the `bot` and `applications.commands` scopes and at least: Manage Channels, Manage Roles, Manage Messages, Kick Members, Ban Members, Moderate Members, Create Invite, View Channels, Send Messages, Embed Links, Attach Files, Read Message History.
+- The bot's role must sit above the roles it manages (needed for `/verify` and the AI role tools).
 
 ### Database
 
@@ -109,6 +110,7 @@ Set these variables (Railway → Variables):
 | `AI_TRUSTED_USERS` | no | Discord usernames allowed to make the assistant act, defaults to `sora_developing,silvan` |
 | `AI_TRUSTED_USER_IDS` | no | User IDs allowed to act, comma separated. Safer than usernames; use this when an account is renamed |
 | `AI_MAX_CALLS_PER_MINUTE` | no | Model calls per minute, defaults to `10`. An action uses two or more calls |
+| `ENABLE_GUILD_MEMBERS_INTENT` | no | `true` requests the Server Members Intent, so the AI can list/search members by name. Enable it in the Developer Portal first |
 | `VERIFIED_ROLE_NAME` | no | Role granted by `/verify`, defaults to `champ` (also tried case-insensitively, plus `verified`). Created when missing |
 | `UNVERIFIED_ROLE_NAME` | no | Optional role removed on successful verification, defaults to `unverified` |
 | `DATA_DIR` | no | Folder for `ticket-categories.json` and `ticket-panels.json`; use a Railway volume such as `/data` |

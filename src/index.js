@@ -24,13 +24,19 @@ assertEnv(REQUIRED_ENV);
 // Guilds + GuildMessages are needed for commands and the word filter.
 // MessageContent is a privileged intent: it must be enabled in the Developer Portal
 // (Bot -> Privileged Gateway Intents) or the word filter cannot read messages.
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-});
+// Server Members Intent is optional: it is needed to search/list members by name (the admin
+// AI tools). It must be enabled in the Developer Portal first, otherwise Discord rejects the
+// login, so it is opt-in and the member tools fall back to the cache without it.
+const intents = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
+];
+if (process.env.ENABLE_GUILD_MEMBERS_INTENT === 'true') {
+  intents.push(GatewayIntentBits.GuildMembers);
+}
+
+const client = new Client({ intents });
 
 client.commands = new Collection();
 for (const command of loadCommands()) {
