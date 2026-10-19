@@ -102,14 +102,14 @@ Set these variables (Railway → Variables):
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `AI_API_KEY` | yes, to enable | Key from Groq or Google AI Studio |
+| `AI_API_KEY` | yes, to enable | Key from Groq or Google AI Studio. `GROQ_API_KEY` is accepted as a fallback |
 | `AI_BASE_URL` | no | Defaults to `https://api.groq.com/openai/v1`. For Gemini use `https://generativelanguage.googleapis.com/v1beta/openai` |
 | `AI_MODEL` | no | Defaults to `openai/gpt-oss-20b`. For Gemini use e.g. `gemini-3.5-flash-lite` |
 | `AI_SITE_URLS` | recommended | Comma-separated website pages to read, e.g. `https://example.com/support,https://example.com/faq` |
 | `AI_HIDDEN_HOSTS` | no | Domains the assistant must never mention, defaults to `champclient.com`. Comma separated; every mention is replaced with the official website |
 | `AI_TRUSTED_USERS` | no | Discord usernames allowed to make the assistant act, defaults to `sora_developing,silvan` |
 | `AI_TRUSTED_USER_IDS` | no | User IDs allowed to act, comma separated. Safer than usernames; use this when an account is renamed |
-| `AI_MAX_CALLS_PER_MINUTE` | no | Model calls per minute, defaults to `10`. An action uses two or more calls |
+| `AI_MAX_CALLS_PER_MINUTE` | no | Model calls per minute, defaults to `20`. An action uses two or more calls |
 | `ENABLE_GUILD_MEMBERS_INTENT` | no | `true` requests the Server Members Intent, so the AI can list/search members by name. Enable it in the Developer Portal first |
 | `VERIFIED_ROLE_NAME` | no | Role granted by `/verify`, defaults to `champ` (also tried case-insensitively, plus `verified`). Created when missing |
 | `UNVERIFIED_ROLE_NAME` | no | Optional role removed on successful verification, defaults to `unverified` |

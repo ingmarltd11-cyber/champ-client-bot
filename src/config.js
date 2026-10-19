@@ -56,7 +56,8 @@ const TICKETS = {
 // Support assistant in ticket channels. Without AI_API_KEY it stays off and the bot works as before.
 // Works with any OpenAI-compatible endpoint: Groq (default) or Gemini's /openai/ layer.
 const AI = {
-  apiKey: process.env.AI_API_KEY ?? '',
+  // GROQ_API_KEY is accepted too, so a key copied from the website project works here.
+  apiKey: process.env.AI_API_KEY ?? process.env.GROQ_API_KEY ?? '',
   baseUrl: (process.env.AI_BASE_URL ?? 'https://api.groq.com/openai/v1').replace(/\/+$/, ''),
   model: process.env.AI_MODEL ?? 'openai/gpt-oss-20b',
   // Optional override for the knowledge folders (default: ./knowledge).
@@ -89,7 +90,7 @@ const AI = {
     .filter(Boolean),
   // Staying under the free tier: a few calls per minute and per ticket. An action for a
   // trusted user costs two calls (the tool round and the confirmation), so this leaves room.
-  maxCallsPerMinute: Number(process.env.AI_MAX_CALLS_PER_MINUTE ?? 10),
+  maxCallsPerMinute: Number(process.env.AI_MAX_CALLS_PER_MINUTE ?? 20),
   maxRepliesPerTicket: 6,
   cooldownMs: 10000,
   timeoutMs: 20000,
