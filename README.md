@@ -67,7 +67,7 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 ## AI support in tickets
 
-The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It answers normal questions, small talk and general knowledge questions as well as product questions, and it remembers the last few messages of the channel so follow-up questions still make sense. Asking about modules or features gets a link to the `/features` page of the configured website straight away.
+The assistant answers the opener in every ticket, whatever the category, and answers anyone who mentions the bot in a normal channel. It answers normal questions, small talk and general knowledge questions as well as product questions, and it remembers the last few messages of the channel so follow-up questions still make sense. Asking about modules or features gets a link to the features page of the configured website straight away (taken from the crawled pages, so `features.html` or `/features` both work).
 
 The one hard limit: it never gives code, never explains how to get code, and never links to code hosting. A code question is refused before the model is even called. When a product detail is missing from the knowledge base, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
 
