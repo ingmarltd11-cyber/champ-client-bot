@@ -49,8 +49,21 @@ function reply(interaction, content) {
   return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
+// Posts a fresh panel with the current categories. Returns the labels whose emoji were skipped.
+async function postPanel(target) {
+  const skippedEmoji = [];
+  const embed = new EmbedBuilder()
+    .setTitle('Support Tickets')
+    .setDescription('Click a button below to open a private ticket with our staff.')
+    .setColor(BRAND_COLOR);
+
+  await target.send({ embeds: [embed], components: buildRows(loadCategories(), skippedEmoji) });
+  return skippedEmoji;
+}
+
 module.exports = {
   buildRows,
+  postPanel,
 
   data: new SlashCommandBuilder()
     .setName('ticket-panel')
@@ -71,8 +84,6 @@ module.exports = {
       return reply(interaction, '❌ I cannot use that channel. Pick a text channel.');
     }
 
-    const categories = loadCategories();
-
     // Check up front, so the reason is clear instead of "Something went wrong".
     const me = interaction.guild?.members?.me;
     if (me && typeof target.permissionsFor === 'function') {
@@ -90,14 +101,9 @@ module.exports = {
       }
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('Support Tickets')
-      .setDescription('Click a button below to open a private ticket with our staff.')
-      .setColor(BRAND_COLOR);
-
-    const skippedEmoji = [];
+    let skippedEmoji = [];
     try {
-      await target.send({ embeds: [embed], components: buildRows(categories, skippedEmoji) });
+      skippedEmoji = await postPanel(target);
     } catch (err) {
       console.error('Could not post the ticket panel:', err);
       return reply(interaction, `❌ Discord refused the panel in ${target}: ${err.message}`);

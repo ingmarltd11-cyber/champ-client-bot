@@ -7,6 +7,8 @@ const {
   MAX_CHARS: MAX_CONTEXT_CHARS,
 } = require('./knowledge');
 const webKnowledge = require('./webKnowledge');
+const { TOOLS, executeTool } = require('./aiTools');
+const { isTrustedUser } = require('../utils/trustedUsers');
 
 const OPENER_PATTERN = /ticket-opener:(\d+)/;
 
@@ -143,6 +145,15 @@ const RULES = [
   'Do not start your answer with the user name or repeat the question.',
 ].join('\n');
 
+// Added only for a trusted user, so nobody else learns that the assistant can act.
+const TRUSTED_RULES = [
+  '',
+  'You may act in this server for this user. When they ask you to send a message or change the ticket options, call the matching tool instead of explaining it.',
+  'Use the channel and option names they gave, or look them up with list_ticket_options.',
+  'After a tool runs, confirm briefly what changed. If it reports an error, say what went wrong and ask for the missing detail.',
+  'Never call a tool the user did not ask for.',
+].join('\n');
+
 const REFUSAL =
   "I can't help with that: I don't share code and I won't explain how to get it. " +
   'A staff member can help you further.';
@@ -225,6 +236,10 @@ function skipReason(message) {
   const channel = message.channel;
   const text = String(message.content ?? '').trim();
   if (text.length < 2) return 'empty text (is the Message Content intent enabled in the Discord portal?)';
+
+  // Trusted users may ask the assistant to act anywhere in the server, without a mention or cooldown.
+  if (isTrustedUser(message.author)) return null;
+
   if (handled.has(channel?.id)) return 'this ticket was already handed to staff';
 
   const openerId = openerIdOf(channel);
@@ -274,7 +289,7 @@ async function recentHistory(message) {
   }
 }
 
-async function buildMessages(message, question) {
+async function buildMessages(message, question, trusted = false) {
   // Website pages first, then the local folders, both only when they have something relevant.
   const web = await webKnowledge
     .getContext(question, { splitIntoChunks, pickChunks })
@@ -287,10 +302,13 @@ async function buildMessages(message, question) {
   ).slice(0, MAX_CONTEXT_CHARS);
   const system = [
     RULES,
+    trusted ? TRUSTED_RULES : '',
     knowledge
       ? `\nKnowledge base (website and own documents):\n${knowledge}`
       : '\nNo product information is available right now. General questions can still be answered; reply with only ESCALATE for product details.',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   const history = await recentHistory(message);
 
@@ -306,33 +324,48 @@ async function buildMessages(message, question) {
   ];
 }
 
-async function callModel(messages) {
+async function callModel(messages, { withTools = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI.timeoutMs);
 
   try {
+    const payload = {
+      model: AI.model,
+      messages,
+      temperature: 0.2,
+      max_tokens: 400,
+    };
+    if (withTools) {
+      payload.tools = TOOLS;
+      payload.tool_choice = 'auto';
+    }
+
     const response = await fetch(`${AI.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${AI.apiKey}`,
       },
-      body: JSON.stringify({
-        model: AI.model,
-        messages,
-        temperature: 0.2,
-        max_tokens: 400,
-      }),
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
+      // An endpoint that does not support tools must still be able to answer normally.
+      if (withTools && response.status === 400) {
+        console.error('The model rejected the tools, retrying without them:', body.slice(0, 200));
+        return callModel(messages, { withTools: false });
+      }
       throw new Error(`AI request failed (${response.status}): ${body.slice(0, 200)}`);
     }
 
     const data = await response.json();
-    return String(data.choices?.[0]?.message?.content ?? '').trim();
+    const answer = data.choices?.[0]?.message ?? {};
+    return {
+      content: String(answer.content ?? '').trim(),
+      toolCalls: Array.isArray(answer.tool_calls) ? answer.tool_calls : [],
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -376,6 +409,10 @@ async function handleMessage(message) {
   replies.set(channel.id, state);
 
   // A hidden domain is removed before the model sees the question, so it cannot answer about it.
+  const trusted = isTrustedUser(message.author);
+  if (trusted) {
+    console.log(`Trusted user ${message.author.username} (${message.author.id}) is talking to the assistant`);
+  }
   const question = hideHiddenHosts(stripMention(message.content, message));
 
   // Asking for code is answered without calling the model at all.
@@ -397,8 +434,39 @@ async function handleMessage(message) {
   try {
     if (typeof channel.sendTyping === 'function') await channel.sendTyping().catch(() => {});
 
+    const messages = await buildMessages(message, question, trusted);
+
     countCall();
-    const raw = hideHiddenHosts(await callModel(await buildMessages(message, question)));
+    let response = await callModel(messages, { withTools: trusted });
+    const performed = [];
+
+    // A trusted user may ask for actions; the model returns tool calls that are run here.
+    for (let round = 0; trusted && round < 2 && response.toolCalls.length > 0; round += 1) {
+      const calls = response.toolCalls.slice(0, 4);
+      messages.push({ role: 'assistant', content: response.content || null, tool_calls: calls });
+
+      for (const call of calls) {
+        let args = {};
+        try {
+          args = JSON.parse(call.function?.arguments || '{}');
+        } catch {
+          args = {};
+        }
+
+        const result = await executeTool(message, call.function?.name, args);
+        if (result.summary) {
+          performed.push(result.summary);
+          console.log(`AI action by ${message.author.username}: ${result.summary}`);
+        }
+        messages.push({ role: 'tool', tool_call_id: call.id, content: result.text });
+      }
+
+      countCall();
+      response = await callModel(messages, { withTools: true });
+    }
+
+    let raw = hideHiddenHosts(response.content);
+    if (!raw && performed.length > 0) raw = `✅ Done: ${performed.join('; ')}.`;
     const withoutCode = stripCode(raw);
 
     // The model produced code or a link to code: refuse instead of sending it.

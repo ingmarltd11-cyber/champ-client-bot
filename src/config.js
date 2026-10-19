@@ -66,14 +66,25 @@ const AI = {
     .split(',')
     .map((url) => url.trim())
     .filter(Boolean),
+  // Users who may ask the assistant to act (send a message, change ticket options).
+  // Matched on the Discord account username, which is unique, plus optional user IDs.
+  trustedUsers: (process.env.AI_TRUSTED_USERS ?? 'sora_developing,silvan')
+    .split(',')
+    .map((name) => name.trim().replace(/^@/, '').toLowerCase())
+    .filter(Boolean),
+  trustedUserIds: (process.env.AI_TRUSTED_USER_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean),
   // Domains the assistant must never mention or link. Removed from the knowledge, the
   // question and the answer, and replaced with the official website.
   hiddenHosts: (process.env.AI_HIDDEN_HOSTS ?? 'champclient.com')
     .split(',')
     .map((host) => host.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '').replace(/^www\./i, ''))
     .filter(Boolean),
-  // Staying under the free tier: a few calls per minute and per ticket.
-  maxCallsPerMinute: 5,
+  // Staying under the free tier: a few calls per minute and per ticket. An action for a
+  // trusted user costs two calls (the tool round and the confirmation), so this leaves room.
+  maxCallsPerMinute: Number(process.env.AI_MAX_CALLS_PER_MINUTE ?? 10),
   maxRepliesPerTicket: 6,
   cooldownMs: 10000,
   timeoutMs: 20000,
