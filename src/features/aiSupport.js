@@ -72,6 +72,19 @@ function wantsFeatures(question) {
   return !asksForSuggestion && FEATURES_REQUEST.test(question);
 }
 
+function mentionsHiddenHost(text) {
+  if (AI.hiddenHosts.length === 0) return false;
+  const hosts = AI.hiddenHosts.map(escapeRegExp).join('|');
+  return new RegExp(`(?<![a-z0-9@-])(?:[a-z0-9-]+\\.)*(?:${hosts})\\b`, 'i').test(String(text ?? ''));
+}
+
+function officialSiteAnswer() {
+  const url = officialUrl();
+  return url
+    ? `The only official website is ${url}. Use it for downloads, pricing and your dashboard.`
+    : 'The only official website is the one linked in this server. Use it for downloads, pricing and your dashboard.';
+}
+
 async function featuresAnswer() {
   const url = await featuresUrl();
   if (!url) return '';
@@ -462,12 +475,20 @@ async function handleMessage(message) {
   if (trusted) {
     console.log(`Trusted user ${message.author.username} (${message.author.id}) is talking to the assistant`);
   }
-  const question = hideHiddenHosts(stripMention(message.content, message));
+  const rawQuestion = stripMention(message.content, message);
+  const hiddenAsked = mentionsHiddenHost(rawQuestion);
+  const question = hideHiddenHosts(rawQuestion);
 
   // Asking for code is answered without calling the model at all.
   if (CODE_REQUEST.test(question)) {
     await channel.send({ content: REFUSAL, allowedMentions: { parse: [] } }).catch(() => {});
     await escalate(channel, message.guild, 'This is outside what I am allowed to answer.');
+    return;
+  }
+
+  // A hidden domain does not exist for the assistant; point at the official site instead.
+  if (hiddenAsked) {
+    await channel.send({ content: officialSiteAnswer(), allowedMentions: { parse: [] } }).catch(() => {});
     return;
   }
 
@@ -577,6 +598,8 @@ module.exports = {
   featuresUrl,
   featuresAnswer,
   wantsFeatures,
+  mentionsHiddenHost,
+  officialSiteAnswer,
   FEATURES_REQUEST,
   officialUrl,
   hideHiddenHosts,
