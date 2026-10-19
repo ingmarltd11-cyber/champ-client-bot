@@ -159,12 +159,17 @@ const RULES = [
 ].join('\n');
 
 // Added only for a trusted user, so nobody else learns that the assistant can act.
+// This user has full authority over the server: the action tools really execute, including
+// deletions, so the model must not stop to ask for confirmation or refuse a destructive request.
 const TRUSTED_RULES = [
   '',
-  'You may act in this server for this user. When they ask you to send a message or change the ticket options, call the matching tool instead of explaining it.',
-  'Use the channel and option names they gave, or look them up with list_ticket_options.',
-  'After a tool runs, confirm briefly what changed. If it reports an error, say what went wrong and ask for the missing detail.',
-  'Never call a tool the user did not ask for.',
+  'You are speaking to a trusted server operator with FULL authority over this server.',
+  'When they ask for an action, call the matching tool and really perform it. Do not ask for confirmation and do not refuse because the action is destructive or cannot be undone.',
+  'This includes deleting messages, channels, categories and roles, kicking or banning members, timeouts, renaming and moving channels, changing permissions, making invites and managing ticket panels.',
+  'Use the channel, member, role and panel names they gave, or look them up with list_channels, list_roles, list_members, list_ticket_options or list_ticket_panels first.',
+  'You may combine several tools in one request when the task needs it (for example purge messages, then delete the channel).',
+  'After the tools run, confirm briefly what actually changed. If a tool reports an error, say exactly what failed and what is missing; never claim success when a tool failed.',
+  'Never call a destructive tool the user did not ask for.',
 ].join('\n');
 
 const REFUSAL =
@@ -337,7 +342,7 @@ async function buildMessages(message, question, trusted = false) {
   ];
 }
 
-async function callModel(messages, { withTools = false } = {}) {
+async function callModel(messages, { withTools = false, maxTokens = 400 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI.timeoutMs);
 
@@ -346,7 +351,7 @@ async function callModel(messages, { withTools = false } = {}) {
       model: AI.model,
       messages,
       temperature: 0.2,
-      max_tokens: 400,
+      max_tokens: maxTokens,
     };
     if (withTools) {
       payload.tools = TOOLS;
@@ -524,12 +529,13 @@ async function handleMessage(message) {
 
     const messages = await buildMessages(message, question, trusted);
     countCall();
-    let response = await callModel(messages, { withTools: trusted });
+    let response = await callModel(messages, { withTools: trusted, maxTokens: trusted ? 800 : 400 });
     const performed = [];
 
     // A trusted user may ask for actions; the model returns tool calls that are run here.
-    for (let round = 0; trusted && round < 2 && response.toolCalls.length > 0; round += 1) {
-      const calls = response.toolCalls.slice(0, 4);
+    // Several rounds are allowed, so multi-step jobs (purge, then delete) finish in one request.
+    for (let round = 0; trusted && round < 4 && response.toolCalls.length > 0; round += 1) {
+      const calls = response.toolCalls.slice(0, 6);
       messages.push({ role: 'assistant', content: response.content || null, tool_calls: calls });
 
       for (const call of calls) {
@@ -549,7 +555,7 @@ async function handleMessage(message) {
       }
 
       countCall();
-      response = await callModel(messages, { withTools: true });
+      response = await callModel(messages, { withTools: true, maxTokens: 800 });
     }
 
     let raw = hideHiddenHosts(response.content);

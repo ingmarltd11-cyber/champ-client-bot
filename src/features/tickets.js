@@ -12,6 +12,7 @@ const {
 const { ROLES, STAFF_ROLE_NAMES, TICKETS, BRAND_COLOR } = require('../config');
 const { findRole, isStaff } = require('../utils/permissions');
 const { loadCategories, MAX_QUESTIONS, MAX_MESSAGE_LENGTH, buttonStyle } = require('../utils/ticketCategories');
+const { DEFAULT_PANEL_ID, getPanel, panelCategories } = require('../utils/ticketPanels');
 const { createTranscript } = require('../utils/transcript');
 const { saveTicketOpened, saveTicketClosed } = require('../utils/ticketStore');
 
@@ -34,6 +35,21 @@ const OPENER_PATTERN = /ticket-opener:(\d+)/;
 const OPEN_PREFIX = 'ticket-open:';
 const FORM_PREFIX = 'ticket-form:';
 const CLOSE_MODAL_ID = 'ticket-close-modal';
+
+// Buttons from a multi-panel setup use "panelId:categoryId"; old panels only send the
+// category, which belongs to the default panel. Both keep working.
+function parseTicketId(value) {
+  const parts = String(value ?? '').split(':').filter(Boolean);
+  if (parts.length >= 2) return { panelId: parts[0], categoryId: parts[1] };
+  return { panelId: DEFAULT_PANEL_ID, categoryId: parts[0] };
+}
+
+function findCategoryInPanel(panelId, categoryId) {
+  const panel = getPanel(panelId);
+  if (panel) return panelCategories(panel).find((category) => category.id === categoryId) ?? null;
+  // Unknown panel (removed while the panel message stayed): fall back to all categories.
+  return loadCategories().find((category) => category.id === categoryId) ?? null;
+}
 
 // Channels that are already being closed, so a double click cannot schedule two deletes.
 const closing = new Set();
@@ -92,9 +108,9 @@ function findExistingTicket(guild, user) {
 }
 
 // One text input per question. Discord allows at most 5 inputs per modal.
-function buildFormModal(category) {
+function buildFormModal(category, panelId = DEFAULT_PANEL_ID) {
   const modal = new ModalBuilder()
-    .setCustomId(`${FORM_PREFIX}${category.id}`)
+    .setCustomId(`${FORM_PREFIX}${panelId}:${category.id}`)
     .setTitle(category.label.slice(0, 45));
 
   modal.addComponents(
@@ -113,7 +129,7 @@ function buildFormModal(category) {
 }
 
 // Creates the ticket channel. The interaction must already be deferred.
-async function createTicket(interaction, category, answers) {
+async function createTicket(interaction, category, answers, panelId = DEFAULT_PANEL_ID) {
   const { guild, user, client } = interaction;
 
   const existing = findExistingTicket(guild, user);
@@ -127,7 +143,7 @@ async function createTicket(interaction, category, answers) {
       name: ticketChannelName(user.username),
       type: ChannelType.GuildText,
       parent: parent.id,
-      topic: `ticket-opener:${user.id} type:${category.id}`,
+      topic: `ticket-opener:${user.id} type:${category.id} panel:${panelId}`,
       permissionOverwrites: ticketOverwrites(guild, client.user.id, user.id),
       reason: `Ticket opened by ${user.tag}`,
     });
@@ -170,8 +186,8 @@ async function createTicket(interaction, category, answers) {
 }
 
 async function handleOpen(interaction) {
-  const categoryId = interaction.customId.slice(OPEN_PREFIX.length);
-  const category = loadCategories().find((c) => c.id === categoryId);
+  const { panelId, categoryId } = parseTicketId(interaction.customId.slice(OPEN_PREFIX.length));
+  const category = findCategoryInPanel(panelId, categoryId);
   if (!category) {
     return interaction.reply({
       content: '❌ This ticket category no longer exists. Ask staff to repost the panel.',
@@ -189,16 +205,16 @@ async function handleOpen(interaction) {
 
   // Categories with questions show the form first; the ticket is created on submit.
   if (category.questions?.length) {
-    return interaction.showModal(buildFormModal(category));
+    return interaction.showModal(buildFormModal(category, panelId));
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  return createTicket(interaction, category, []);
+  return createTicket(interaction, category, [], panelId);
 }
 
 async function handleFormSubmit(interaction) {
-  const categoryId = interaction.customId.slice(FORM_PREFIX.length);
-  const category = loadCategories().find((c) => c.id === categoryId);
+  const { panelId, categoryId } = parseTicketId(interaction.customId.slice(FORM_PREFIX.length));
+  const category = findCategoryInPanel(panelId, categoryId);
   if (!category) {
     return interaction.reply({
       content: '❌ This ticket category no longer exists. Please open a new ticket.',
@@ -213,7 +229,7 @@ async function handleFormSubmit(interaction) {
     answer: interaction.fields.getTextInputValue(`q${index}`),
   }));
 
-  return createTicket(interaction, category, answers);
+  return createTicket(interaction, category, answers, panelId);
 }
 
 // DMs the opener the full transcript. If DMs are closed, the channel says so before it is deleted.
@@ -358,6 +374,8 @@ async function denyCloseRequest(interaction) {
 }
 
 module.exports = {
+  parseTicketId,
+  findCategoryInPanel,
   handleOpen,
   handleFormSubmit,
   requestClose,

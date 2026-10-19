@@ -6,6 +6,7 @@ const {
 } = require('discord.js');
 const { CHANNELS, VERIFIED_VIEW_ROLE_NAMES, ALWAYS_VISIBLE_CHANNELS } = require('../config');
 const { findRole, baseChannelName } = require('../utils/permissions');
+const { verifiedRoleNames, resolveVerifiedRole } = require('../features/verify');
 
 // The bot itself must keep working after the gate runs, otherwise it can no longer
 // post the ticket panel, reviews or verify messages in the channels it just locked.
@@ -29,7 +30,24 @@ module.exports = {
 
     const { guild } = interaction;
     const everyone = guild.roles.everyone;
-    const viewRoles = VERIFIED_VIEW_ROLE_NAMES.map((name) => findRole(guild, name)).filter(Boolean);
+
+    // Make sure the verified role exists before locking anything. Without it the gate would
+    // hide every channel and no member could ever unlock them.
+    let verifiedRole = null;
+    let roleWarning = '';
+    try {
+      verifiedRole = await resolveVerifiedRole(guild);
+    } catch (err) {
+      roleWarning = `\n⚠️ Could not create/find the verified role: ${err.message}`;
+    }
+
+    // Both the configured staff/verified roles and the actual verified role (which may be
+    // "Champ", "verified" or a name from VERIFIED_ROLE_NAME) must keep access.
+    const roleNames = [...new Set([...VERIFIED_VIEW_ROLE_NAMES, ...verifiedRoleNames()])];
+    const viewRoles = roleNames.map((name) => findRole(guild, name)).filter(Boolean);
+    if (verifiedRole && !viewRoles.some((role) => role.id === verifiedRole.id)) {
+      viewRoles.push(verifiedRole);
+    }
     const bot = guild.members.me;
 
     let locked = 0;
@@ -68,7 +86,7 @@ module.exports = {
     await interaction.editReply({
       content: `✅ Locked ${locked} channel(s). #${CHANNELS.verify} stays visible to everyone.${
         bot ? '' : ' ⚠️ Could not find the bot member, so its own access was not added.'
-      }${failure}`,
+      }${failure}${roleWarning}`,
     });
   },
 };

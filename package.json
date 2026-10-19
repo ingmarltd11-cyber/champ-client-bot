@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
+    "test": "node --test",
     "deploy": "node src/deploy-commands.js",
     "identity": "node src/set-identity.js"
   },
