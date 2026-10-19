@@ -41,6 +41,15 @@ module.exports = {
       roleWarning = `\n⚠️ Could not create/find the verified role: ${err.message}`;
     }
 
+    // Never lock the server without a role that can unlock it again.
+    if (!verifiedRole) {
+      return interaction.editReply({
+        content: `❌ Nothing was locked.${roleWarning}\n\n` +
+          'Fix the verified role first: give the bot Manage Roles, create a role named `Champ`, ' +
+          'and put the bot role above it. Then run `/setup-verify-gate` again.',
+      });
+    }
+
     // Both the configured staff/verified roles and the actual verified role (which may be
     // "Champ", "verified" or a name from VERIFIED_ROLE_NAME) must keep access.
     const roleNames = [...new Set([...VERIFIED_VIEW_ROLE_NAMES, ...verifiedRoleNames()])];
