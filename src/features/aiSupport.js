@@ -255,7 +255,11 @@ function skipReason(message) {
   const text = String(message.content ?? '').trim();
   if (text.length < 2) return 'empty text (is the Message Content intent enabled in the Discord portal?)';
 
-  // Trusted users may ask the assistant to act anywhere in the server, without a mention or cooldown.
+  // The assistant only ever answers when it is pinged — everywhere, including tickets
+  // and for trusted users. No mention, no reply.
+  if (!isMentioned(message)) return 'the bot was not mentioned';
+
+  // Trusted users may ask the assistant to act anywhere in the server, without a cooldown.
   if (isTrustedUser(message.author)) return null;
 
   if (handled.has(channel?.id)) return 'this ticket was already handed to staff';
@@ -272,8 +276,6 @@ function skipReason(message) {
     return null;
   }
 
-  // Outside a ticket: only when the bot is mentioned.
-  if (!isMentioned(message)) return 'the bot was not mentioned';
   if (cooldownLeft(channel.id) > 0) return 'still in the cooldown between replies';
   return null;
 }
