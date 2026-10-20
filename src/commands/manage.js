@@ -140,7 +140,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('manage')
     .setDescription('Create, edit and delete channels and roles, and set permissions (owner only).')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    // Manage Server keeps it out of the member command list, including for an owner role
+    // that does not have Administrator. The owner check in execute() decides who may use it.
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((sub) =>
       sub
         .setName('channel-create')

@@ -66,7 +66,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('key')
     .setDescription('Create and manage Champ Client license keys (owner only).')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    // Manage Server keeps it out of the member command list, including for an owner role
+    // that does not have Administrator. The owner check in execute() decides who may use it.
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((sub) =>
       sub
         .setName('generate')
