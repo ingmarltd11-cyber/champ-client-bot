@@ -10,6 +10,8 @@ const {
 const { BRAND_COLOR } = require('../config');
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-verify')
     .setDescription('Post the verification panel in this channel.')

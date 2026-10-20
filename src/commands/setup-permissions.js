@@ -22,6 +22,8 @@ const EXEMPT_ALLOW = {
 };
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-permissions')
     .setDescription('Lock #announcements so only staff can post there.')

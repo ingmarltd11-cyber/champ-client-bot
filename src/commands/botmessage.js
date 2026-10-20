@@ -1,7 +1,9 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
+const { isOwner } = require('../utils/permissions');
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('botmessage')
     .setDescription('Post a message as the bot in a channel.')
@@ -19,8 +21,8 @@ module.exports = {
 
   async execute(interaction) {
     // Server admins can override the default permission above, so check again here.
-    if (!isAdmin(interaction.member)) {
-      return interaction.reply({ content: '❌ Only administrators can use this command.', flags: MessageFlags.Ephemeral });
+    if (!isOwner(interaction.member)) {
+      return interaction.reply({ content: '❌ Only the owner role can use this command.', flags: MessageFlags.Ephemeral });
     }
 
     const channel = interaction.options.getChannel('channel');

@@ -86,6 +86,7 @@ async function postPanel(target, panelOrName = DEFAULT_PANEL_ID) {
 }
 
 module.exports = {
+  access: 'owner',
   buildRows,
   postPanel,
 

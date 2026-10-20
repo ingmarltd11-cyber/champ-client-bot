@@ -18,6 +18,8 @@ const ROLE_DEFINITIONS = [
 ];
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-roles')
     .setDescription('Create the server roles that do not exist yet.')

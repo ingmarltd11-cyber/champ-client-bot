@@ -1,18 +1,19 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
-const { isTrustedUser } = require('../utils/trustedUsers');
+const { isOwner } = require('../utils/permissions');
 const settings = require('../utils/botSettings');
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('ai-start')
     .setDescription('Give the AI its admin actions back after /ai-stop.')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member) && !isTrustedUser(interaction.user)) {
+    if (!isOwner(interaction.member)) {
       return interaction.reply({
-        content: '❌ Only an administrator or a trusted operator can start the AI actions.',
+        content: '❌ Only the owner role can start the AI actions.',
         flags: MessageFlags.Ephemeral,
       });
     }

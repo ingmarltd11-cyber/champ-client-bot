@@ -18,6 +18,8 @@ function reply(interaction, content) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('ticket-panels')
     .setDescription('Manage multiple saved ticket panels.')

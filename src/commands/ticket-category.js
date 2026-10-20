@@ -39,6 +39,8 @@ function describeCategory(category) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('ticket-category')
     .setDescription('Manage the categories shown on the ticket panel.')

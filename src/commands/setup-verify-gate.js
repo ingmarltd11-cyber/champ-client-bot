@@ -20,6 +20,8 @@ const BOT_PERMISSIONS = {
 };
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-verify-gate')
     .setDescription('Hide all channels from unverified members except #verify.')

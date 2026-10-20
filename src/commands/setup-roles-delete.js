@@ -7,7 +7,7 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
+const { isOwner } = require('../utils/permissions');
 
 // Roles that can be deleted: not @everyone, not managed (bot/integration roles),
 // and only roles the bot can edit (below its highest role).
@@ -35,14 +35,14 @@ async function handleButton(interaction) {
 
   if (interaction.user.id !== userId) {
     return interaction.reply({
-      content: '❌ Only the admin who started this can confirm it.',
+      content: '❌ Only the owner who started this can confirm it.',
       flags: MessageFlags.Ephemeral,
     });
   }
   if (action === 'cancel') {
     return interaction.update({ content: 'Role deletion cancelled.', embeds: [], components: [] });
   }
-  if (!isAdmin(interaction.member)) {
+  if (!isOwner(interaction.member)) {
     return interaction.update({ content: '❌ You no longer have permission.', embeds: [], components: [] });
   }
 
@@ -72,14 +72,16 @@ async function handleButton(interaction) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-roles-delete')
     .setDescription('Delete all deletable roles on this server (roles only, after confirmation).')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) {
-      return interaction.reply({ content: '❌ Administrator only.', flags: MessageFlags.Ephemeral });
+    if (!isOwner(interaction.member)) {
+      return interaction.reply({ content: '❌ Only the owner role can delete roles.', flags: MessageFlags.Ephemeral });
     }
 
     const roles = getDeletableRoles(interaction.guild);

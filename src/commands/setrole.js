@@ -3,8 +3,7 @@ const {
   PermissionFlagsBits,
   MessageFlags,
 } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
-const { isTrustedUser } = require('../utils/trustedUsers');
+const { isOwner } = require('../utils/permissions');
 const settings = require('../utils/botSettings');
 
 function reply(interaction, content) {
@@ -12,6 +11,8 @@ function reply(interaction, content) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setrole')
     .setDescription('Give a member a role now, and every time they open a ticket.')
@@ -24,8 +25,8 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member) && !isTrustedUser(interaction.user)) {
-      return reply(interaction, '❌ Only an administrator or a trusted operator can set roles.');
+    if (!isOwner(interaction.member)) {
+      return reply(interaction, '❌ Only the owner role can set roles.');
     }
 
     const user = interaction.options.getUser('user', true);

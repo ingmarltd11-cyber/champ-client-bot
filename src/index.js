@@ -8,7 +8,7 @@ const {
   MessageFlags,
   Partials,
 } = require('discord.js');
-const { assertEnv, REQUIRED_ENV, AI } = require('./config');
+const { assertEnv, REQUIRED_ENV, AI, OWNER_ROLE_NAMES } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
 const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
@@ -16,6 +16,7 @@ const aiSupport = require('./features/aiSupport');
 const learning = require('./features/learning');
 const settings = require('./utils/botSettings');
 const { isAdmin } = require('./utils/permissions');
+const { canUseCommand, accessDeniedMessage } = require('./utils/commandAccess');
 const { registerCommands } = require('./utils/registerCommands');
 const { respondVerified } = require('./features/verify');
 const tickets = require('./features/tickets');
@@ -74,6 +75,22 @@ client.once(Events.ClientReady, async (readyClient) => {
     console.error('Could not set up the AI training channel:', err.message);
   }
 
+  // /key and /manage only work for the owner role, so say which role that is at startup.
+  try {
+    const guild = await readyClient.guilds.fetch(process.env.GUILD_ID);
+    const ownerRole = guild.roles.cache.find((role) =>
+      OWNER_ROLE_NAMES.some((name) => role.name.trim().toLowerCase() === name.toLowerCase())
+    );
+    console.log(
+      ownerRole
+        ? `Owner commands (/key, /manage, setup): role "${ownerRole.name}"`
+        : `Owner commands (/key, /manage, setup): only the Discord server owner; ` +
+            `no role named ${OWNER_ROLE_NAMES.map((name) => `"${name}"`).join(' or ')} found`
+    );
+  } catch (err) {
+    console.error('Could not check the owner role:', err.message);
+  }
+
   // Keeps the slash commands in sync with the code, so a new command exists after a deploy
   // without running npm run deploy by hand. A failure here must not stop the bot.
   registerCommands().catch((err) => console.error('Could not register commands:', err.message));
@@ -122,7 +139,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
-      if (command) await command.execute(interaction);
+      if (!command) return;
+
+      // One gate for every command: a command with `access: 'owner'` (the license keys,
+      // /manage and the setup-commands) is reserved for the owner role here, so a command
+      // file cannot forget the check. Commands without the field stay open as before.
+      if (!canUseCommand(command, interaction.member)) {
+        return interaction.reply({
+          content: accessDeniedMessage(command),
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      await command.execute(interaction);
       return;
     }
 

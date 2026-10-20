@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
-const { isTrustedUser } = require('../utils/trustedUsers');
+const { isOwner } = require('../utils/permissions');
 const settings = require('../utils/botSettings');
 const { describeTicketActions } = require('../features/ticketRoles');
 
@@ -9,6 +8,8 @@ function reply(interaction, content) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('ticket-actions')
     .setDescription('Manage what happens automatically when someone opens a ticket.')
@@ -53,8 +54,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member) && !isTrustedUser(interaction.user)) {
-      return reply(interaction, '❌ Only an administrator or a trusted operator can change ticket actions.');
+    if (!isOwner(interaction.member)) {
+      return reply(interaction, '❌ Only the owner role can change ticket actions.');
     }
 
     const sub = interaction.options.getSubcommand();

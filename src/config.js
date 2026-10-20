@@ -11,6 +11,14 @@ const ROLES = {
   developer: 'developer',
 };
 
+// The only role allowed to use the management commands (/key, /manage and the setup-commands).
+// Comma separated, so a server that spells it "Owner" or "Founder" can set OWNER_ROLE_NAME.
+// The server owner (Discord's own "owner") always counts as owner too.
+const OWNER_ROLE_NAMES = (process.env.OWNER_ROLE_NAME ?? ROLES.owner)
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+
 // Staff roles: get staff permissions and access to every ticket.
 const STAFF_ROLE_NAMES = [
   ROLES.developer,
@@ -109,6 +117,11 @@ const AI = {
 
 const BRAND_COLOR = 0x9b59b6;
 
+// The customer website. License keys made with /key are redeemed there.
+const SITE_URL = (process.env.SITE_URL ?? 'https://champ-site-psi.vercel.app')
+  .trim()
+  .replace(/\/+$/, '');
+
 // Channels every member can see, even before verification (base name, emoji prefix ignored).
 const ALWAYS_VISIBLE_CHANNELS = ['champ.com'];
 
@@ -129,6 +142,7 @@ function assertEnv(names) {
 
 module.exports = {
   ROLES,
+  OWNER_ROLE_NAMES,
   STAFF_ROLE_NAMES,
   TICKET_STAFF_ROLE_NAMES,
   ANNOUNCEMENT_EXEMPT_ROLE_NAMES,
@@ -137,6 +151,7 @@ module.exports = {
   TICKETS,
   AI,
   BRAND_COLOR,
+  SITE_URL,
   ALWAYS_VISIBLE_CHANNELS,
   REQUIRED_ENV,
   assertEnv,

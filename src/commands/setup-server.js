@@ -34,6 +34,8 @@ function buildOverwrites(guild, everyone) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-server')
     .setDescription('Create the server categories and channels that do not exist yet.')

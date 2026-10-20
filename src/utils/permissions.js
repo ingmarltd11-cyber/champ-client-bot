@@ -1,5 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { STAFF_ROLE_NAMES } = require('../config');
+const { OWNER_ROLE_NAMES, STAFF_ROLE_NAMES } = require('../config');
 
 function normalizeName(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -13,6 +13,17 @@ function isAdmin(member) {
 // Comparing case-insensitively means /verify and the staff checks keep working either way.
 function roleMatchesName(role, name) {
   return normalizeName(role?.name) === normalizeName(name);
+}
+
+// Owner only: the management commands (license keys, server setup, /manage).
+// The Discord server owner always counts, so a server can never lock itself out.
+function isOwner(member) {
+  if (!member) return false;
+  const guildOwnerId = member.guild?.ownerId;
+  if (guildOwnerId && member.id === guildOwnerId) return true;
+  const roles = member.roles?.cache;
+  if (!roles) return false;
+  return roles.some((role) => OWNER_ROLE_NAMES.some((name) => roleMatchesName(role, name)));
 }
 
 function isStaff(member) {
@@ -60,6 +71,7 @@ function findChannel(guild, name) {
 
 module.exports = {
   isAdmin,
+  isOwner,
   isStaff,
   findRole,
   findRoleAny,

@@ -4,7 +4,7 @@ const {
   ChannelType,
   MessageFlags,
 } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
+const { isOwner } = require('../utils/permissions');
 
 // Same look as the channels in src/server-structure.js: an emoji, then '│', then the name.
 const SEPARATOR = '│';
@@ -42,6 +42,8 @@ function findCategory(guild, name) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('server-setup-chanel-create')
     .setDescription('Create a channel in the server style: emoji, then the name, inside a category.')
@@ -69,8 +71,8 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) {
-      return interaction.reply({ content: '❌ Administrator only.', flags: MessageFlags.Ephemeral });
+    if (!isOwner(interaction.member)) {
+      return interaction.reply({ content: '❌ Only the owner role can create channels.', flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });

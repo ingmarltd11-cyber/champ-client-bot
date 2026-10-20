@@ -14,6 +14,9 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Reviews**: `/review` posts a star rating and description in `#reviews`.
 - **Teaching the bot**: the bot creates a training channel once (`🧠│ai-training`, hidden from regular members) and remembers it. Everything you teach it there applies to **everyone, in every channel**: a reply, a reaction or a lesson. `/learn` manages it too.
 - **Ticket actions**: `/setrole user role` and `/ticket-actions add` give roles automatically when someone opens a ticket, for one member or for everyone, per panel or for every panel.
+- **License keys**: `/key generate` makes `CHAMP-XXXX-XXXX-XXXX-XXXX` keys in the website's `licenses` table, free to hand out or already linked to a customer's email. `/key list | revoke | restore | delete` manages them.
+- **Server management**: `/manage` creates and deletes channels, categories and roles, edits roles, assigns and removes them, and sets channel permissions per role or member.
+- **Owner only**: `/key`, `/manage` and every setup command are reserved for the `owner` role (and the Discord server owner). Everyone else is refused, even with Administrator.
 - **Emergency brake**: `/ai-stop` stops every AI admin action at once; `/ai-start` gives them back.
 
 ## Setup
@@ -42,6 +45,8 @@ cp .env.example .env   # Windows: copy the file manually
 
 Run `supabase/schema.sql` once in the Supabase SQL editor. The bot stores tickets in the `tickets` table.
 
+Use the **same Supabase project as the website** (and run `website/supabase/schema.sql` there too). `/key` writes to the website's `licenses` table, so a key made in Discord is redeemable on the dashboard straight away and the launcher's `/api/license/validate` check accepts it.
+
 ### Running
 
 ```bash
@@ -54,24 +59,32 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 
 | Command | Who | Purpose |
 |---|---|---|
-| `/setup-verify-gate` | Admin | Hide all channels from `@everyone` except `#verify` |
-| `/setup-verify` | Admin | Post the Verify panel in the current channel |
+| `/setup-verify-gate` | Owner | Hide all channels from `@everyone` except `#verify` |
+| `/setup-verify` | Owner | Post the Verify panel in the current channel |
 | `/verify` | Everyone | Get the `champ` role |
-| `/setup-permissions` | Admin | Lock `#announcements` for regular members |
-| `/setup-roles-delete` | Admin | Delete all deletable roles (confirmation required) |
-| `/server-setup-chanel-create categorie naam [emoji]` | Admin | Create a channel in the server style (`emoji│name`) inside a category, creating the category when needed |
-| `/ticket-panel [channel] [panel] [title] [description] [categories] [save]` | Admin | Post a panel; add a new panel name + `save: true` to keep it |
-| `/ticket-panels create\|list\|remove\|set-default` | Admin | Manage multiple saved panels |
-| `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
-| `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
+| `/setup-permissions` | Owner | Lock `#announcements` for regular members |
+| `/setup-roles` | Owner | Create the server roles that do not exist yet |
+| `/setup-roles-delete` | Owner | Delete all deletable roles (confirmation required) |
+| `/setup-server` | Owner | Create the categories and channels from `src/server-structure.js` |
+| `/setup-server-delete` | Owner | Delete all channels and categories (confirmation required) |
+| `/server-setup-chanel-create categorie naam [emoji]` | Owner | Create a channel in the server style (`emoji│name`) inside a category, creating the category when needed |
+| `/manage channel-create\|channel-delete\|category-create` | Owner | Create channels (text, voice, forum, announcement) and categories, delete them with `confirm: true` |
+| `/manage role-create\|role-edit\|role-delete\|role-assign\|role-remove` | Owner | Create, recolour, rename, delete, assign and remove roles |
+| `/manage perms channel [role] [user] [allow] [deny] [reset]` | Owner | Set or remove a channel permission overwrite, e.g. `allow: view,send` |
+| `/key generate plan\|list\|revoke\|restore\|delete` | Owner | Create and manage license keys |
+| `/botmessage channel info` | Owner | Post a message as the bot |
+| `/ticket-panel [channel] [panel] [title] [description] [categories] [save]` | Owner | Post a panel; add a new panel name + `save: true` to keep it |
+| `/ticket-panels create\|list\|remove\|set-default` | Owner | Manage multiple saved panels |
+| `/ticket-category add\|remove\|list` | Owner | Manage panel categories |
+| `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Owner | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
 | `/close [reason]` | `support` / `developer` | Close the ticket at once |
 | `/close-request [reason]` | `support` / `developer` | Ping the opener and ask them to accept or deny the close request |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
 | `/learn add\|lesson\|list\|remove\|clear\|channel` | Admin / trusted | Teach replies, reactions and lessons; show the training channel |
-| `/setrole user role` | Admin / trusted | Give the role now and every time that member opens a ticket |
-| `/ticket-actions list\|add\|remove\|clear` | Admin / trusted | Manage the roles given when a ticket opens |
-| `/ai-stop` | Admin / trusted | Immediately stop every AI admin action |
-| `/ai-start` | Admin / trusted | Turn the AI admin actions back on |
+| `/setrole user role` | Owner | Give the role now and every time that member opens a ticket |
+| `/ticket-actions list\|add\|remove\|clear` | Owner | Manage the roles given when a ticket opens |
+| `/ai-stop` | Owner | Immediately stop every AI admin action |
+| `/ai-start` | Owner | Turn the AI admin actions back on |
 
 ## Notes
 
@@ -126,6 +139,8 @@ Set these variables (Railway → Variables):
 | `VERIFIED_ROLE_NAME` | no | Role granted by `/verify`, defaults to `champ` (also tried case-insensitively, plus `verified`). Created when missing |
 | `UNVERIFIED_ROLE_NAME` | no | Optional role removed on successful verification, defaults to `unverified` |
 | `DATA_DIR` | no | Folder for `ticket-categories.json`, `ticket-panels.json` and `bot-settings.json`; use a Railway volume such as `/data` |
+| `OWNER_ROLE_NAME` | no | Role(s) allowed to use `/key`, `/manage` and the setup commands, defaults to `owner`. Comma separated; the Discord server owner always counts |
+| `SITE_URL` | no | Customer website shown in the `/key` reply, defaults to `https://champ-site-psi.vercel.app` |
 | `SUPPORT_API_URL` | no | Website that runs the shared assistant, defaults to `https://champ-site-psi.vercel.app`. Empty disables the shared engine |
 | `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
@@ -145,6 +160,48 @@ The assistant turns those sentences into saved rules with its own tools, so a ru
 ## Ticket actions
 
 `/setrole user role` gives the role now **and** every time that member opens a ticket. `/ticket-actions add role [user] [panel]` does the same without the immediate role: leave `user` out for everyone, leave `panel` out for every panel. `/ticket-actions list` shows them, `remove` takes one away and `clear` removes a member's actions or everything. A role the bot cannot hand out (too high, managed by an integration, missing permission) is reported in the ticket instead of breaking it.
+
+## Owner-only commands
+
+`/key`, `/manage` and every `setup-*` command are reserved for the **owner** role. The check runs once in `src/index.js`: a command declares `access: 'owner'` and is refused with an ephemeral message for anyone else, even a Discord administrator. The Discord server owner always counts as owner, so the server can never lock itself out. The role name comes from `OWNER_ROLE_NAME` (comma separated, defaults to `owner`), and the startup log says which role was found.
+
+Ticket commands (`/close`, `/close-request`), `/verify`, `/review` and `/learn` keep their own rules: staff close tickets, members verify themselves, and the trusted AI accounts keep teaching the bot.
+
+## License keys
+
+```
+/key generate plan:<monthly|lifetime> [amount:1-25] [email] [days]
+/key list [search] [limit]
+/key revoke key:<CHAMP-...>
+/key restore key:<CHAMP-...>
+/key delete key:<CHAMP-...> confirm:true
+```
+
+`/key generate` makes keys in the website's `licenses` table, in the same `CHAMP-XXXX-XXXX-XXXX-XXXX` shape the dashboard and the client expect:
+
+- **Without `email`** the key is free to hand out. It gets a placeholder address (`unassigned+<key>@keys.champclient.local`) so the row is valid; the customer opens the dashboard, clicks **Redeem a key** and the key is linked to their account. Until then nobody can download with it.
+- **With `email`** the key is linked to that customer at once. If that email already has a license for the plan, the existing key is reactivated instead of creating a second one (the table allows one license per email and plan, exactly like Stripe checkout does).
+- **Expiry**: monthly keys last 30 days, lifetime keys never expire, and `days` overrides both. The clock starts when the key is generated, so make a monthly key when you hand it over (or give it more `days`).
+- `revoke` sets the status to `revoked`, so `/api/license/validate` and the download endpoint refuse the key; `restore` switches it back on; `delete` removes the row for good and needs `confirm: true`.
+
+The customer never sees the placeholder: it is replaced by their account email on redeem. Use the same Supabase project as the website.
+
+## Server management
+
+`/manage` is the slash-command version of what the trusted AI accounts can do by chat:
+
+| Subcommand | Does |
+|---|---|
+| `channel-create name [type] [category] [private]` | Text, voice, forum or announcement channel; `private: true` hides it from `@everyone` |
+| `channel-delete channel confirm:true` | Delete a channel or category |
+| `category-create name` | Create a category |
+| `role-create name [color] [hoist] [mentionable] [permissions]` | Create a role with a hex colour and permissions like `view, send` |
+| `role-edit role [name] [color] [hoist] [mentionable]` | Rename, recolour or change an existing role |
+| `role-delete role confirm:true` | Delete a role (never `@everyone`, never a bot/integration role) |
+| `role-assign user role` / `role-remove user role` | Give or take a role |
+| `perms channel [role] [user] [allow] [deny] [reset:true]` | Set a channel overwrite for a role or member; without a target it applies to `@everyone` |
+
+Permission names are short (`view`, `send`, `read-history`, `attach`, `embed`, `react`, `mention`, `external-emoji`, `manage-messages`, `manage-channel`, `create-invite`, `connect`, `speak`, `stream`, `mute`, `deafen`, `move`, …) and Discord's own names such as `ManageMessages` work too. Unknown names are reported instead of silently ignored. The bot needs Manage Channels, Manage Roles and (for `perms`) Manage Permissions, and its role must sit above every role it edits, deletes or hands out.
 
 ## Ticket assistant, /close and close requests
 

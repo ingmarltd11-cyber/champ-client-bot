@@ -8,7 +8,7 @@ const {
   ButtonStyle,
   MessageFlags,
 } = require('discord.js');
-const { isAdmin } = require('../utils/permissions');
+const { isOwner } = require('../utils/permissions');
 
 function summarize(guild) {
   const all = [...guild.channels.cache.values()];
@@ -36,14 +36,14 @@ async function handleButton(interaction) {
 
   if (interaction.user.id !== userId) {
     return interaction.reply({
-      content: '❌ Only the admin who started this can confirm it.',
+      content: '❌ Only the owner who started this can confirm it.',
       flags: MessageFlags.Ephemeral,
     });
   }
   if (action === 'cancel') {
     return interaction.update({ content: 'Deletion cancelled. Nothing was changed.', embeds: [], components: [] });
   }
-  if (!isAdmin(interaction.member)) {
+  if (!isOwner(interaction.member)) {
     return interaction.update({ content: '❌ You no longer have permission.', embeds: [], components: [] });
   }
 
@@ -75,14 +75,16 @@ async function handleButton(interaction) {
 }
 
 module.exports = {
+  access: 'owner',
+
   data: new SlashCommandBuilder()
     .setName('setup-server-delete')
     .setDescription('Delete all channels and categories on this server (after confirmation).')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    if (!isAdmin(interaction.member)) {
-      return interaction.reply({ content: '❌ Administrator only.', flags: MessageFlags.Ephemeral });
+    if (!isOwner(interaction.member)) {
+      return interaction.reply({ content: '❌ Only the owner role can delete channels.', flags: MessageFlags.Ephemeral });
     }
 
     const { channels, categories } = summarize(interaction.guild);
