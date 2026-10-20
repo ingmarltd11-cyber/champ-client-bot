@@ -10,7 +10,7 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Roles delete (admin)**: `/setup-roles-delete` deletes all deletable roles after a confirm button. Channels are never touched.
 - **Tickets**: `/ticket-panel` posts a category menu; each choice opens a private `ticket-<username>` channel. Staff (including `support`) always have access. Closing needs a reason. Staff close directly; the opener sends a close request that staff accept or deny. The reason is posted in the ticket and saved to Supabase.
 - **Multiple ticket panels**: every panel has its own title, description and set of categories, and can be posted in its own channel. `/ticket-panels create | list | remove | set-default` manages them; `/ticket-panel panel:<name>` posts one. Old panel messages keep working.
-- **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories. A category can have up to 5 form questions (shown as a Discord form before the ticket opens; answers are posted in the ticket) and a custom welcome message.
+- **Ticket categories**: `/ticket-category` edits the categories of one panel, so every subcommand starts with `panel:<name>` and picks the category by the `name` shown on that panel (the ID still works). `/ticket-category add` also attaches the new category to that panel. A category can have up to 5 form questions (shown as a Discord form before the ticket opens; answers are posted in the ticket) and a custom welcome message. Example: `/ticket-category question-add panel:media name:"General Support" text:"What do you need?"`.
 - **Reviews**: `/review` posts a star rating and description in `#reviews`.
 - **Teaching the bot**: the bot creates a training channel once (`🧠│ai-training`, hidden from regular members) and remembers it. Everything you teach it there applies to **everyone, in every channel**: a reply, a reaction or a lesson. `/learn` manages it too.
 - **Ticket actions**: `/setrole user role` and `/ticket-actions add` give roles automatically when someone opens a ticket, for one member or for everyone, per panel or for every panel.
@@ -79,8 +79,8 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/botmessage channel info` | Owner | Post a message as the bot |
 | `/ticket-panel [channel] [panel] [title] [description] [categories] [save]` | Owner | Post a panel; add a new panel name + `save: true` to keep it |
 | `/ticket-panels create\|list\|remove\|set-default` | Owner | Manage multiple saved panels |
-| `/ticket-category add\|remove\|list` | Owner | Manage panel categories |
-| `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Owner | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
+| `/ticket-category add\|remove\|list` | Owner | Manage the categories of one panel (`panel:` and `name:`) |
+| `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Owner | Set the form questions (max 5, 45 characters each) and the welcome message of a category on a panel |
 | `/close [reason]` | `support` / `developer` | Close the ticket at once |
 | `/close-request [reason]` | `support` / `developer` | Ping the opener and ask them to accept or deny the close request |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
