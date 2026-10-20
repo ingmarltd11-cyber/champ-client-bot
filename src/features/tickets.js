@@ -10,7 +10,9 @@ const {
   TextInputStyle,
 } = require('discord.js');
 const { ROLES, STAFF_ROLE_NAMES, TICKETS, BRAND_COLOR } = require('../config');
-const { findRole, isStaff } = require('../utils/permissions');
+const { findRole, isStaff, normalizeName } = require('../utils/permissions');
+const { applyTicketActions } = require('./ticketRoles');
+const { verifiedRoleNames } = require('./verify');
 const { loadCategories, MAX_QUESTIONS, MAX_MESSAGE_LENGTH, buttonStyle } = require('../utils/ticketCategories');
 const { DEFAULT_PANEL_ID, getPanel, panelCategories } = require('../utils/ticketPanels');
 const { createTranscript } = require('../utils/transcript');
@@ -35,6 +37,20 @@ const OPENER_PATTERN = /ticket-opener:(\d+)/;
 const OPEN_PREFIX = 'ticket-open:';
 const FORM_PREFIX = 'ticket-form:';
 const CLOSE_MODAL_ID = 'ticket-close-modal';
+
+// The verify panel shows one extra button for members who are not verified yet. They may open
+// one ticket at a time (the normal one-open-ticket rule), so nobody is stuck without help.
+const UNVERIFIED_TICKET_ID = 'unverified-ticket';
+const UNVERIFIED_CATEGORY = {
+  id: 'unverified-support',
+  label: 'Unverified support',
+  emoji: '🎫',
+  description: 'One ticket for members who are not verified yet',
+  welcomeMessage:
+    'You are not verified yet, so you can open one ticket at a time to ask staff for help.\n\n' +
+    'Tell us what you need and a staff member will answer as soon as possible.\n' +
+    'When you are done, close the ticket; you can open a new one later or verify with `/verify`.',
+};
 
 // Buttons from a multi-panel setup use "panelId:categoryId"; old panels only send the
 // category, which belongs to the default panel. Both keep working.
@@ -171,6 +187,26 @@ async function createTicket(interaction, category, answers, panelId = DEFAULT_PA
 
     await channel.send({ content: `${user}`, embeds: [embed], components: [row] });
 
+    // Roles configured with /setrole or /ticket-actions are given to the opener here.
+    const applied = await applyTicketActions(interaction.member, { panelId });
+    if (applied.added.length > 0) {
+      await channel
+        .send({
+          content: `✅ Added to the opener: **${applied.added.join('**, **')}**`,
+          allowedMentions: { parse: [] },
+        })
+        .catch(() => {});
+    }
+    if (applied.failed.length > 0) {
+      console.error(`Ticket actions for ${user.tag} failed: ${applied.failed.join(', ')}`);
+      await channel
+        .send({
+          content: `⚠️ These ticket roles could not be added: ${applied.failed.join(', ')}`,
+          allowedMentions: { parse: [] },
+        })
+        .catch(() => {});
+    }
+
     await saveTicketOpened({
       channelId: channel.id,
       guildId: guild.id,
@@ -210,6 +246,43 @@ async function handleOpen(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   return createTicket(interaction, category, [], panelId);
+}
+
+function isVerifiedMember(member) {
+  if (!member) return false;
+  if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+
+  const names = verifiedRoleNames().map(normalizeName);
+  return member.roles.cache.some((role) => names.includes(normalizeName(role.name)));
+}
+
+// Opened from the verify panel. Unverified members get exactly one ticket at a time; a member
+// who is already verified is sent to the normal ticket panel instead.
+async function openUnverifiedTicket(interaction) {
+  if (!interaction.guild) {
+    return interaction.reply({
+      content: '❌ Tickets only work inside the server.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (isVerifiedMember(interaction.member)) {
+    return interaction.reply({
+      content: '✅ You are already verified, so you can use the normal ticket panel. This button is for unverified members.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const existing = findExistingTicket(interaction.guild, interaction.user);
+  if (existing) {
+    return interaction.reply({
+      content: `You already have an open ticket: ${existing}. You can open one ticket at a time.`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  return createTicket(interaction, UNVERIFIED_CATEGORY, [], DEFAULT_PANEL_ID);
 }
 
 async function handleFormSubmit(interaction) {
@@ -374,9 +447,13 @@ async function denyCloseRequest(interaction) {
 }
 
 module.exports = {
+  UNVERIFIED_TICKET_ID,
+  UNVERIFIED_CATEGORY,
+  isVerifiedMember,
   parseTicketId,
   findCategoryInPanel,
   handleOpen,
+  openUnverifiedTicket,
   handleFormSubmit,
   requestClose,
   handleCloseModal,

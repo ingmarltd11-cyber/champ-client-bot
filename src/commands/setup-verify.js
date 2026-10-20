@@ -18,7 +18,11 @@ module.exports = {
   async execute(interaction) {
     const embed = new EmbedBuilder()
       .setTitle('Verify to get access')
-      .setDescription('Click the button below, or run `/verify`, to unlock the rest of the server.')
+      .setDescription(
+        'Click the button below, or run `/verify`, to unlock the rest of the server.\n\n' +
+          'Not verified yet and need help first? Open a ticket with the second button. ' +
+          'You can have one ticket open at a time.'
+      )
       .setColor(BRAND_COLOR);
 
     const row = new ActionRowBuilder().addComponents(
@@ -26,7 +30,12 @@ module.exports = {
         .setCustomId('verify-button')
         .setLabel('Verify')
         .setEmoji('✅')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('unverified-ticket')
+        .setLabel('Open a ticket (not verified yet)')
+        .setEmoji('🎫')
+        .setStyle(ButtonStyle.Secondary)
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });

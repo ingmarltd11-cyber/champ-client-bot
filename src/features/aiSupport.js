@@ -8,6 +8,8 @@ const {
 } = require('./knowledge');
 const webKnowledge = require('./webKnowledge');
 const { TOOLS, executeTool } = require('./aiTools');
+const learning = require('./learning');
+const settings = require('../utils/botSettings');
 const { isTrustedUser } = require('../utils/trustedUsers');
 
 const OPENER_PATTERN = /ticket-opener:(\d+)/;
@@ -168,8 +170,15 @@ const TRUSTED_RULES = [
   'This includes deleting messages, channels, categories and roles, kicking or banning members, timeouts, renaming and moving channels, changing permissions, making invites and managing ticket panels.',
   'Use the channel, member, role and panel names they gave, or look them up with list_channels, list_roles, list_members, list_ticket_options or list_ticket_panels first.',
   'You may combine several tools in one request when the task needs it (for example purge messages, then delete the channel).',
+  'You can teach yourself lasting behaviour with teach_rule (a reply or reaction to messages, for everyone) and learn_lesson (an instruction for your own answers). Use them when they ask you to learn something.',
   'After the tools run, confirm briefly what actually changed. If a tool reports an error, say exactly what failed and what is missing; never claim success when a tool failed.',
   'Never call a destructive tool the user did not ask for.',
+].join('\n');
+
+const STOPPED_RULES = [
+  '',
+  'IMPORTANT: your admin actions are currently STOPPED by the operator (/ai-stop).',
+  'Every tool call will be refused. Say that the actions are stopped and that /ai-start turns them back on. Do not pretend anything changed.',
 ].join('\n');
 
 const REFUSAL =
@@ -323,6 +332,8 @@ async function buildMessages(message, question, trusted = false) {
   const system = [
     RULES,
     trusted ? TRUSTED_RULES : '',
+    trusted && !settings.isAiAdminEnabled() ? STOPPED_RULES : '',
+    learning.describeLearning(),
     knowledge
       ? `\nKnowledge base (website and own documents):\n${knowledge}`
       : '\nNo product information is available right now. General questions can still be answered; reply with only ESCALATE for product details.',

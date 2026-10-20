@@ -254,3 +254,222 @@ test('permission constants used by the tools exist in discord.js', () => {
     assert.equal(typeof PermissionFlagsBits[name], 'bigint');
   }
 });
+
+// --- Learning, the AI stop switch and ticket actions --------------------------------
+
+const settings = require('../src/utils/botSettings');
+const learning = require('../src/features/learning');
+const ticketRoles = require('../src/features/ticketRoles');
+const { loadCommands } = require('../src/utils/loadCommands');
+const tickets = require('../src/features/tickets');
+
+function resetSettings() {
+  settings.setAiAdminEnabled(true);
+  settings.clearLearnedRules();
+  settings.clearLessons();
+  settings.clearTicketActions();
+  settings.setLearningChannelId(null);
+}
+
+function makeMessage(content, overrides = {}) {
+  const channel = {
+    id: overrides.channelId ?? 'channel-1',
+    sent: [],
+    send: async (payload) => {
+      channel.sent.push(payload.content);
+      return payload;
+    },
+  };
+  const message = {
+    id: 'message-1',
+    guild: { id: 'guild' },
+    channel,
+    author: { bot: false, id: 'member-1', username: 'member' },
+    system: false,
+    webhookId: null,
+    content,
+    reacted: [],
+    react: async (emoji) => {
+      if (emoji === 'not-an-emoji') throw new Error('invalid emoji');
+      message.reacted.push(emoji);
+      return emoji;
+    },
+    ...overrides,
+  };
+  return message;
+}
+
+test('a rule with trigger * answers every member, not just the operator', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: 'poep' });
+
+  const first = makeMessage('hallo');
+  assert.equal(await learning.handleLearnedRule(first), true);
+  assert.deepEqual(first.channel.sent, ['poep']);
+
+  const second = makeMessage('iets heel anders', { author: { bot: false, id: 'member-2', username: 'other' } });
+  assert.equal(await learning.handleLearnedRule(second), true);
+  assert.deepEqual(second.channel.sent, ['poep']);
+});
+
+test('a rule only answers messages that contain its trigger', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: 'hallo|hey', response: 'hoi!' });
+
+  const matching = makeMessage('nou hallo daar');
+  assert.equal(await learning.handleLearnedRule(matching), true);
+  assert.deepEqual(matching.channel.sent, ['hoi!']);
+
+  const other = makeMessage('iets anders');
+  assert.equal(await learning.handleLearnedRule(other), false);
+  assert.deepEqual(other.channel.sent, []);
+});
+
+test('a reaction rule reacts, and falls back to a reply for an invalid emoji', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: '🔥', mode: 'react' });
+
+  const fire = makeMessage('brand');
+  assert.equal(await learning.handleLearnedRule(fire), true);
+  assert.deepEqual(fire.reacted, ['🔥']);
+  assert.deepEqual(fire.channel.sent, []);
+
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: 'not-an-emoji', mode: 'react' });
+
+  const broken = makeMessage('brand');
+  assert.equal(await learning.handleLearnedRule(broken), true);
+  assert.deepEqual(broken.channel.sent, ['not-an-emoji']);
+});
+
+test('the bot never answers itself, and rules stay quiet in the training channel', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: 'poep' });
+
+  const own = makeMessage('poep', { author: { bot: true, id: 'bot', username: 'bot' } });
+  assert.equal(await learning.handleLearnedRule(own), false);
+
+  settings.setLearningChannelId('training');
+  const training = makeMessage('reageer op elk bericht met poep', { channelId: 'training' });
+  assert.equal(await learning.handleLearnedRule(training), false);
+  assert.deepEqual(training.channel.sent, []);
+});
+
+test('rules can be listed and removed by number', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: 'poep', response: 'poep terug' });
+  assert.match(learning.describeRules(), /poep/);
+
+  const removed = settings.removeLearnedRule('1');
+  assert.equal(removed.trigger, 'poep');
+  assert.equal(settings.listLearnedRules().length, 0);
+  assert.equal(settings.findMatchingRule('poep'), null);
+});
+
+test('/ai-stop blocks every tool, /ai-start gives them back', async () => {
+  resetSettings();
+  const message = { author: { bot: false, username: 'sora_developing', id: '1' }, guild: { id: 'guild' } };
+
+  assert.equal(settings.setAiAdminEnabled(false), false);
+  const blocked = await aiTools.executeTool(message, 'list_channels', {});
+  assert.match(blocked.text, /stopped/i);
+
+  assert.equal(settings.setAiAdminEnabled(true), true);
+  assert.equal(settings.isAiAdminEnabled(), true);
+});
+
+test('the assistant can be taught a rule with its own tool', async () => {
+  resetSettings();
+  const message = {
+    author: { bot: false, username: 'sora_developing', id: '1' },
+    guild: { id: 'guild' },
+    channel: { id: 'training' },
+  };
+
+  const result = await aiTools.executeTool(message, 'teach_rule', { trigger: '*', response: 'poep' });
+  assert.match(result.text, /Learned/);
+  assert.equal(settings.findMatchingRule('anything').response, 'poep');
+
+  const list = await aiTools.executeTool(message, 'list_learning', {});
+  assert.match(list.text, /poep/);
+});
+
+test('ticket actions apply to everyone or to one member only', async () => {
+  resetSettings();
+  settings.addTicketAction({ roleId: 'role-buyer', roleName: 'buyer' });
+  settings.addTicketAction({ roleId: 'role-vip', roleName: 'vip', userId: 'member-1' });
+
+  assert.deepEqual(
+    settings.getTicketActionsFor({ panelId: 'default', userId: 'member-2' }).map((a) => a.roleId),
+    ['role-buyer']
+  );
+  assert.deepEqual(
+    settings.getTicketActionsFor({ panelId: 'default', userId: 'member-1' }).map((a) => a.roleId),
+    ['role-buyer', 'role-vip']
+  );
+});
+
+test('applying ticket actions gives the roles to the opener and skips the impossible ones', async () => {
+  resetSettings();
+  settings.addTicketAction({ roleId: 'role-buyer', roleName: 'buyer' });
+  settings.addTicketAction({ roleId: 'role-high', roleName: 'high' });
+  settings.addTicketAction({ roleId: 'role-gone', roleName: 'gone' });
+
+  const buyer = { id: 'role-buyer', name: 'buyer', position: 1, managed: false };
+  const high = { id: 'role-high', name: 'high', position: 9, managed: false };
+  const guild = {
+    id: 'guild',
+    roles: {
+      cache: new Collection([
+        [buyer.id, buyer],
+        [high.id, high],
+      ]),
+      fetch: async () => null,
+    },
+    members: { me: { permissions: { has: () => true }, roles: { highest: { position: 5 } } } },
+  };
+  const owned = new Set();
+  const member = {
+    id: 'member-1',
+    guild,
+    roles: {
+      cache: { has: (roleId) => owned.has(roleId) },
+      add: async (role) => {
+        owned.add(role.id);
+      },
+    },
+  };
+
+  const result = await ticketRoles.applyTicketActions(member, { panelId: 'default' });
+  assert.deepEqual(result.added, ['buyer']);
+  assert.equal(owned.has('role-buyer'), true);
+  assert.equal(result.failed.length, 2);
+});
+
+test('an unverified member is not treated as verified', () => {
+  const member = {
+    permissions: { has: () => false },
+    roles: { cache: [{ name: 'unverified' }] },
+  };
+  assert.equal(tickets.isVerifiedMember(member), false);
+
+  const verifiedMember = {
+    permissions: { has: () => false },
+    roles: { cache: [{ name: 'Champ' }] },
+  };
+  assert.equal(tickets.isVerifiedMember(verifiedMember), true);
+});
+
+test('every command file loads with a name, description and execute', () => {
+  const commands = loadCommands();
+  for (const command of commands) {
+    const json = command.data.toJSON();
+    assert.ok(json.name, 'a command has no name');
+    assert.equal(typeof command.execute, 'function');
+  }
+
+  const names = commands.map((command) => command.data.name);
+  for (const expected of ['learn', 'setrole', 'ticket-actions', 'ai-stop', 'ai-start']) {
+    assert.ok(names.includes(expected), `${expected} is missing`);
+  }
+});

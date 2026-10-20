@@ -12,6 +12,8 @@ const { loadCommands } = require('./utils/loadCommands');
 const { describeCategoryStorage } = require('./utils/ticketCategories');
 const { filterMessage } = require('./features/wordFilter');
 const aiSupport = require('./features/aiSupport');
+const learning = require('./features/learning');
+const settings = require('./utils/botSettings');
 const { isAdmin } = require('./utils/permissions');
 const { registerCommands } = require('./utils/registerCommands');
 const { respondVerified } = require('./features/verify');
@@ -43,7 +45,7 @@ for (const command of loadCommands()) {
   client.commands.set(command.data.name, command);
 }
 
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
   console.log(describeCategoryStorage());
   console.log(
@@ -51,6 +53,19 @@ client.once(Events.ClientReady, (readyClient) => {
       ? `AI support: on (${AI.model}, site pages: ${AI.siteUrls.length}, knowledge: website + mod)`
       : 'AI support: off (no AI_API_KEY)'
   );
+  console.log(
+    `AI admin actions: ${settings.isAiAdminEnabled() ? 'on' : 'stopped (/ai-start)'}; ` +
+      `${settings.listLearnedRules().length} learned rule(s), ${settings.listLessons().length} lesson(s)`
+  );
+
+  // The training channel is created once and then remembered, so the bot always has a place
+  // where it can be taught new behaviour. A failure here must not stop the bot.
+  try {
+    const guild = await readyClient.guilds.fetch(process.env.GUILD_ID);
+    await learning.ensureLearningChannel(guild);
+  } catch (err) {
+    console.error('Could not set up the AI training channel:', err.message);
+  }
 
   // Keeps the slash commands in sync with the code, so a new command exists after a deploy
   // without running npm run deploy by hand. A failure here must not stop the bot.
@@ -70,8 +85,15 @@ client.on(Events.MessageCreate, (message) => {
 
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
 
-  // Only answers when the bot is pinged (including in tickets), and never gives code.
-  aiSupport.handleMessage(message).catch((err) => console.error('AI support failed:', err));
+  // A learned rule (taught in the training channel) answers first, for every member. When no
+  // rule matches, the assistant answers only if the bot is pinged, and it never gives code.
+  learning
+    .handleLearnedRule(message)
+    .then((handled) => {
+      if (!handled) return aiSupport.handleMessage(message);
+      return null;
+    })
+    .catch((err) => console.error('AI support failed:', err));
 });
 
 client.on(Events.MessageUpdate, (_oldMessage, message) => {
@@ -99,6 +121,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const id = interaction.customId;
 
       if (id === 'verify-button') return respondVerified(interaction);
+      if (id === tickets.UNVERIFIED_TICKET_ID) return tickets.openUnverifiedTicket(interaction);
       if (id.startsWith('ticket-open:')) return tickets.handleOpen(interaction);
       if (id === 'ticket-close') return tickets.requestClose(interaction);
       if (id === 'ticket-close-accept') return tickets.acceptCloseRequest(interaction);

@@ -20,6 +20,8 @@ const {
   savePanel,
 } = require('../utils/ticketPanels');
 const { postPanel } = require('../commands/ticket-panel');
+const settings = require('../utils/botSettings');
+const learning = require('./learning');
 
 const TEXT_CHANNELS = [
   ChannelType.GuildText,
@@ -487,6 +489,76 @@ const TOOLS = [
           channel: { type: 'string', description: 'Channel name, mention or ID. Defaults to this channel.' },
           panel: { type: 'string', description: `Saved panel name/ID. Defaults to ${DEFAULT_PANEL_ID}.` },
         },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'teach_rule',
+      description:
+        'Teach the bot to answer by itself, for every member. trigger "*" applies to every message; otherwise it applies when a message contains that text (alternatives separated by |). This is saved and survives a restart.',
+      parameters: {
+        type: 'object',
+        properties: {
+          trigger: { type: 'string', description: 'Text to look for, or "*" for every message.' },
+          response: {
+            type: 'string',
+            description: 'The reply text, or the emoji to react with when react is true.',
+          },
+          react: { type: 'boolean', description: 'React with the response instead of replying.' },
+        },
+        required: ['trigger', 'response'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forget_rule',
+      description: 'Remove a learned message rule by its number from list_learning or by its ID.',
+      parameters: {
+        type: 'object',
+        properties: { rule: { type: 'string', description: 'Rule number or ID.' } },
+        required: ['rule'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'learn_lesson',
+      description:
+        'Remember an instruction for your own answers, e.g. "never offer a discount" or "always mention the support channel".',
+      parameters: {
+        type: 'object',
+        properties: { text: { type: 'string', description: 'The instruction.' } },
+        required: ['text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_learning',
+      description: 'List everything the bot learned: message rules and lessons.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_ticket_action',
+      description:
+        'Give a role automatically when someone opens a ticket. Leave user out to apply it to everyone, and panel out to apply it to every panel.',
+      parameters: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', description: 'Role name, mention or ID.' },
+          user: { type: 'string', description: 'Only for this member.' },
+          panel: { type: 'string', description: 'Only for tickets from this panel.' },
+        },
+        required: ['role'],
       },
     },
   },
@@ -1279,6 +1351,81 @@ function listPanels() {
   return { text: `Ticket panels:\n${describePanels()}` };
 }
 
+function teachRule(message, args) {
+  const response = clean(args.response);
+  if (!response) return { text: 'A reply or reaction is required.' };
+
+  const rule = settings.addLearnedRule({
+    trigger: clean(args.trigger) || '*',
+    response,
+    mode: args.react ? 'react' : 'reply',
+    createdBy: message.author?.id ?? null,
+  });
+
+  const scope = rule.trigger === '*' ? 'every message' : `a message containing "${rule.trigger}"`;
+  const action = rule.mode === 'react' ? `react with ${rule.response}` : `reply "${rule.response}"`;
+  return {
+    text: `Learned: for ${scope}, ${action}. This applies to everyone in the server.`,
+    summary: `taught the bot to ${action} on ${scope}`,
+  };
+}
+
+function forgetRule(args) {
+  const removed = settings.removeLearnedRule(args.rule);
+  if (!removed) return { text: 'No learned rule matches that number or ID.' };
+  return {
+    text: `Forgot the rule: "${removed.trigger}" → "${removed.response}".`,
+    summary: `removed a learned rule (${removed.trigger})`,
+  };
+}
+
+function learnLesson(message, args) {
+  const lesson = settings.addLesson({ text: args.text, createdBy: message.author?.id ?? null });
+  if (!lesson) return { text: 'The lesson was empty.' };
+  return { text: `Remembered: ${lesson.text}`, summary: 'learned a new lesson' };
+}
+
+function listLearning() {
+  return {
+    text: [
+      'Learned message rules:',
+      learning.describeRules(),
+      '',
+      'Lessons:',
+      learning.describeLessons(),
+      '',
+      `Admin actions: ${settings.isAiAdminEnabled() ? 'on' : 'stopped (/ai-start to turn them back on)'}`,
+    ].join('\n'),
+  };
+}
+
+async function setTicketAction(message, args) {
+  const role = resolveRole(message.guild, args.role);
+  if (!role) return { text: `No role matches "${clean(args.role)}". Check list_roles.` };
+
+  let userId = null;
+  if (clean(args.user)) {
+    let member = null;
+    try {
+      member = await resolveMember(message.guild, args.user);
+    } catch (err) {
+      return { text: err.message };
+    }
+    if (!member) return { text: `No member matches "${clean(args.user)}".` };
+    userId = member.id;
+  }
+
+  const panelId = clean(args.panel) ? getPanel(args.panel)?.id ?? clean(args.panel) : '*';
+  const action = settings.addTicketAction({ roleId: role.id, roleName: role.name, userId, panelId });
+
+  const scope = userId ? `<@${userId}>` : 'everyone';
+  const where = panelId === '*' ? 'every ticket' : `tickets from panel ${panelId}`;
+  return {
+    text: `When ${scope} opens ${where}, the role ${role} is added.`,
+    summary: `set a ticket action: ${role.name} for ${userId ?? 'everyone'}`,
+  };
+}
+
 async function savePanelTool(args) {
   const name = clean(args.panel);
   const title = clean(args.title);
@@ -1326,6 +1473,14 @@ async function postPanelTool(message, args) {
 async function executeTool(message, name, args) {
   if (!isTrustedUser(message.author) || !message.guild) {
     return { text: 'This action is not allowed for this user.' };
+  }
+
+  // /ai-stop is the emergency brake: no tool runs until /ai-start turns it back on.
+  if (!settings.isAiAdminEnabled()) {
+    return {
+      text:
+        'The admin actions are stopped. Nothing was changed. Run /ai-start (or /ai-start in the server) to give the bot its powers back.',
+    };
   }
 
   const input = args && typeof args === 'object' ? args : {};
@@ -1391,6 +1546,16 @@ async function executeTool(message, name, args) {
         return removeOption(input);
       case 'post_ticket_panel':
         return await postPanelTool(message, input);
+      case 'teach_rule':
+        return teachRule(message, input);
+      case 'forget_rule':
+        return forgetRule(input);
+      case 'learn_lesson':
+        return learnLesson(message, input);
+      case 'list_learning':
+        return listLearning();
+      case 'set_ticket_action':
+        return await setTicketAction(message, input);
       default:
         return { text: `Unknown action: ${name}.` };
     }

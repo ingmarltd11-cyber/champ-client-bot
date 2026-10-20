@@ -4,7 +4,7 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 
 ## Features
 
-- **Verification**: `/setup-verify-gate` hides channels from unverified members; `/setup-verify` posts the green Verify button; `/verify` or the button grants the verified role. Role matching ignores capitals (`Champ` = `champ`), accepts `verified`, creates the role when it is missing, and explains exactly what to fix when the bot cannot assign it (Manage Roles or role hierarchy).
+- **Verification**: `/setup-verify-gate` hides channels from unverified members; `/setup-verify` posts the green Verify button plus a 🎫 button that lets an unverified member open **one** ticket; `/verify` or the button grants the verified role. Role matching ignores capitals (`Champ` = `champ`), accepts `verified`, creates the role when it is missing, and explains exactly what to fix when the bot cannot assign it (Manage Roles or role hierarchy).
 - **Announcements lock**: `/setup-permissions` locks `#announcements`. Only `developer`, `owner`, `media` and `media manager` can post there.
 - **Word filter**: any message containing the whole word `rat` is deleted silently.
 - **Roles delete (admin)**: `/setup-roles-delete` deletes all deletable roles after a confirm button. Channels are never touched.
@@ -12,6 +12,9 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Multiple ticket panels**: every panel has its own title, description and set of categories, and can be posted in its own channel. `/ticket-panels create | list | remove | set-default` manages them; `/ticket-panel panel:<name>` posts one. Old panel messages keep working.
 - **Ticket categories**: `/ticket-category add | remove | list` edits the panel categories. A category can have up to 5 form questions (shown as a Discord form before the ticket opens; answers are posted in the ticket) and a custom welcome message.
 - **Reviews**: `/review` posts a star rating and description in `#reviews`.
+- **Teaching the bot**: the bot creates a training channel once (`🧠│ai-training`, hidden from regular members) and remembers it. Everything you teach it there applies to **everyone, in every channel**: a reply, a reaction or a lesson. `/learn` manages it too.
+- **Ticket actions**: `/setrole user role` and `/ticket-actions add` give roles automatically when someone opens a ticket, for one member or for everyone, per panel or for every panel.
+- **Emergency brake**: `/ai-stop` stops every AI admin action at once; `/ai-start` gives them back.
 
 ## Setup
 
@@ -62,10 +65,15 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
 | `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
+| `/learn add\|lesson\|list\|remove\|clear\|channel` | Admin / trusted | Teach replies, reactions and lessons; show the training channel |
+| `/setrole user role` | Admin / trusted | Give the role now and every time that member opens a ticket |
+| `/ticket-actions list\|add\|remove\|clear` | Admin / trusted | Manage the roles given when a ticket opens |
+| `/ai-stop` | Admin / trusted | Immediately stop every AI admin action |
+| `/ai-start` | Admin / trusted | Turn the AI admin actions back on |
 
 ## Notes
 
-- Ticket categories are stored in `data/ticket-categories.json` (git-ignored). Built-in defaults are used when that file does not exist. On Railway the container filesystem is wiped on every deploy, so without a volume the settings reset to the defaults. To keep them: in Railway, add a **Volume** to the service with mount path `/data`, then set the variable `DATA_DIR=/data`. The bot logs `Ticket categories: ... loaded from ...` at startup, so you can confirm which file it uses.
+- Ticket categories are stored in `data/ticket-categories.json`, panels in `data/ticket-panels.json` and the AI settings (stop switch, learned rules, lessons, ticket actions) in `data/bot-settings.json` (all git-ignored). Built-in defaults are used when that file does not exist. On Railway the container filesystem is wiped on every deploy, so without a volume the settings reset to the defaults. To keep them: in Railway, add a **Volume** to the service with mount path `/data`, then set the variable `DATA_DIR=/data`. The bot logs `Ticket categories: ... loaded from ...` at startup, so you can confirm which file it uses.
 - The `reviews` and `announcements` channel names, the `Tickets` category name and the staff role list are set in `src/config.js`.
 
 ## AI support in tickets
@@ -90,11 +98,24 @@ Safety rails that remain: the server owner, the bot itself and `@everyone` canno
 
 > ⚠️ Keep `AI_TRUSTED_USERS`/`AI_TRUSTED_USER_IDS` tight. Anyone on that list can delete channels and roles and ban members through plain chat.
 
+Run `/ai-stop` to take those powers away at once; `/ai-start` gives them back. The stop switch and everything the bot learned are kept in `data/bot-settings.json`, so mount a Railway volume at `/data` and set `DATA_DIR=/data` to survive redeploys. While the actions are stopped the bot still answers questions, and a tool call is refused with a message that says so.
+
 It also treats `champclient.com` (and every spelling of it) as non-existent: the domain is removed from the crawled pages, from the question and from its own answer, and replaced with the official website. So it can never mention or link it.
 
 The one hard limit: it never gives code, never explains how to get code, and never links to code hosting. A code question is refused before the model is even called. When a product detail is missing from the knowledge base, it stops answering that ticket and pings the support role instead. It is switched off unless `AI_API_KEY` is set, so the bot works normally without it.
 
 The website runs the shared answer engine: Discord sends its questions to `https://champ-site-psi.vercel.app/api/ai/chat` (override with `SUPPORT_API_URL`), so the website chat and the bot answer from the same model and knowledge. When that endpoint is unavailable the bot falls back to its own model, which is also what powers the trusted-user actions. The website's model key lives in Vercel as `GROQ_API_KEY` or `AI_API_KEY`; the bot's `AI_API_KEY` is only used for the fallback.
+
+### Learning in the training channel
+
+At startup the bot creates `🧠│ai-training` (only staff and administrators can see it) and posts short instructions. Ping the bot (`@bot ...`) when you talk to it there, because the assistant only answers mentions. Say what you want in your own words:
+
+- `reageer op elk bericht met poep` → it replies `poep` to **every message from everyone**, in every channel
+- `als iemand hallo zegt, antwoord met hey` → it replies `hey` to messages containing "hallo"
+- `reageer met 🔥 op elk bericht met fire` → it adds that reaction instead of a reply
+- `onthou dat we nooit korting geven` → a lesson, added to what the assistant knows
+
+The assistant turns those sentences into saved rules with its own tools, so a rule survives a restart and needs no mention, no slash command and no model call. The equivalent commands are `/learn add trigger:<text|*> response:<text> [react:true]`, `/learn lesson`, `/learn list`, `/learn remove`, `/learn clear`, and `/learn channel` to recreate or show the channel. A learned rule answers first; when none matches, the normal AI support handles the message.
 
 Its fallback answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
 
@@ -113,7 +134,7 @@ Set these variables (Railway → Variables):
 | `ENABLE_GUILD_MEMBERS_INTENT` | no | `true` requests the Server Members Intent, so the AI can list/search members by name. Enable it in the Developer Portal first |
 | `VERIFIED_ROLE_NAME` | no | Role granted by `/verify`, defaults to `champ` (also tried case-insensitively, plus `verified`). Created when missing |
 | `UNVERIFIED_ROLE_NAME` | no | Optional role removed on successful verification, defaults to `unverified` |
-| `DATA_DIR` | no | Folder for `ticket-categories.json` and `ticket-panels.json`; use a Railway volume such as `/data` |
+| `DATA_DIR` | no | Folder for `ticket-categories.json`, `ticket-panels.json` and `bot-settings.json`; use a Railway volume such as `/data` |
 | `SUPPORT_API_URL` | no | Website that runs the shared assistant, defaults to `https://champ-site-psi.vercel.app`. Empty disables the shared engine |
 | `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
