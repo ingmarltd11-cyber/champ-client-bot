@@ -1,3 +1,4 @@
+const { ChannelType } = require('discord.js');
 const { AI, ROLES } = require('../config');
 const { findRole } = require('../utils/permissions');
 const {
@@ -191,7 +192,13 @@ function isEnabled() {
 
 function openerIdOf(channel) {
   const match = OPENER_PATTERN.exec(channel?.topic ?? '');
-  return match ? match[1] : null;
+  if (match) return match[1];
+
+  // A ticket post in a forum is a thread: its owner opened it.
+  if (channel?.isThread?.() && channel.parent?.type === ChannelType.GuildForum) {
+    return channel.ownerId ?? null;
+  }
+  return null;
 }
 
 function isTicketChannel(channel) {
@@ -264,9 +271,10 @@ function skipReason(message) {
   const text = String(message.content ?? '').trim();
   if (text.length < 2) return 'empty text (is the Message Content intent enabled in the Discord portal?)';
 
-  // The assistant only ever answers when it is pinged — everywhere, including tickets
-  // and for trusted users. No mention, no reply.
-  if (!isMentioned(message)) return 'the bot was not mentioned';
+  // In a ticket the opener is answered automatically: they opened it to get help, so needing a
+  // ping first only adds a step. Everywhere else the assistant still answers only when pinged.
+  const ticket = isTicketChannel(channel);
+  if (!isMentioned(message) && !ticket) return 'the bot was not mentioned';
 
   // Trusted users may ask the assistant to act anywhere in the server, without a cooldown.
   if (isTrustedUser(message.author)) return null;
@@ -608,8 +616,40 @@ function resetState() {
   calls = [];
 }
 
+// Answers the intake form of a new ticket straight away, without waiting for the opener to type
+// anything. It reuses the normal message flow by building the question the opener would have
+// sent, mention included, so the same knowledge, limits and language rules apply.
+async function answerIntake(channel, { answers = [], openerId = null } = {}) {
+  if (!isEnabled() || !channel?.send) return false;
+
+  const lines = answers
+    .map(({ question, answer }) => `${String(question ?? '').trim()}: ${String(answer ?? '').trim()}`)
+    .filter((line) => line !== ':');
+  if (lines.length === 0) return false;
+
+  const id = botId(channel);
+  if (!id) return false;
+
+  const question = {
+    id: channel.id,
+    client: channel.client,
+    guild: channel.guild,
+    channel,
+    author: { id: String(openerId ?? 'opener'), username: 'ticket opener', bot: false },
+    system: false,
+    webhookId: null,
+    content: `<@${id}> ${lines.join('\n')}`.slice(0, 1900),
+    mentions: { has: (userId) => userId === id },
+    createdTimestamp: Date.now(),
+  };
+
+  await handleMessage(question);
+  return true;
+}
+
 module.exports = {
   handleMessage,
+  answerIntake,
   shouldHandle,
   resetState,
   isEnabled,

@@ -18,6 +18,7 @@ const { DEFAULT_PANEL_ID, getPanel, panelCategories } = require('../utils/ticket
 const { createTranscript } = require('../utils/transcript');
 const { saveTicketOpened, saveTicketClosed } = require('../utils/ticketStore');
 const triage = require('./ticketTriage');
+const aiSupport = require('./aiSupport');
 
 const USER_ACCESS = [
   PermissionFlagsBits.ViewChannel,
@@ -203,10 +204,21 @@ async function createTicket(interaction, category, answers, panelId = DEFAULT_PA
     await channel.send({ content: `${user}`, embeds: [embed], components: [row] });
 
     // The ticket assistant answers the form right away, for example when the client version is
-    // not one we support, and offers 👍 / 👎 so the opener can confirm or explain.
-    await triage
+    // not one we support, and offers 👍 / 👎 so the opener can confirm or explain. Without such
+    // advice the support assistant answers the answers themselves, so nobody has to ping first.
+    const advice = await triage
       .postTriage(channel, { answers })
-      .catch((err) => console.error('Could not post the ticket advice:', err.message));
+      .catch((err) => {
+        console.error('Could not post the ticket advice:', err.message);
+        return null;
+      });
+
+    if (!advice) {
+      // Not awaited: the opener must not wait for a model call before the ticket is confirmed.
+      aiSupport
+        .answerIntake(channel, { answers, openerId: user.id })
+        .catch((err) => console.error('Could not answer the ticket intake:', err.message));
+    }
 
     // Roles configured with /setrole or /ticket-actions are given to the opener here.
     const applied = await applyTicketActions(interaction.member, { panelId });

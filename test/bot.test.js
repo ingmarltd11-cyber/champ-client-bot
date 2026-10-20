@@ -736,6 +736,103 @@ test('/close refuses a channel that is not a ticket', async () => {
   assert.match(reply[0], /not a ticket/i);
 });
 
+test('the assistant answers the opener in a ticket without a ping', async () => {
+  const aiSupport = require('../src/features/aiSupport');
+  const { AI } = require('../src/config');
+  const previous = AI.apiKey;
+  AI.apiKey = 'test-key';
+
+  try {
+    aiSupport.resetState();
+    const ticket = { id: 'ticket-auto-1', topic: `ticket-opener:${OPENER} type:general-support` };
+    const openerMessage = {
+      id: 'msg-1',
+      guild: { id: 'guild' },
+      channel: ticket,
+      author: { id: OPENER, username: 'member', bot: false },
+      system: false,
+      webhookId: null,
+      content: 'my game crashes when I open the menu',
+      mentions: { has: () => false },
+    };
+
+    assert.equal(aiSupport.shouldHandle(openerMessage), true, 'the opener was left unanswered');
+
+    // Outside a ticket the bot still only answers when it is mentioned.
+    const normalChannel = { ...openerMessage, id: 'msg-2', channel: { id: 'general' } };
+    assert.equal(aiSupport.shouldHandle(normalChannel), false);
+
+    // Staff writing in the ticket do not trigger the assistant.
+    const staff = {
+      ...openerMessage,
+      id: 'msg-3',
+      author: { id: '222222222222222222', username: 'support', bot: false },
+    };
+    assert.equal(aiSupport.shouldHandle(staff), false);
+
+    // A ticket post in a forum is a ticket too, so its owner is answered without a ping.
+    const forumThread = {
+      id: 'post-auto',
+      isThread: () => true,
+      parent: { type: ChannelType.GuildForum },
+      ownerId: OPENER,
+    };
+    const forumMessage = { ...openerMessage, id: 'msg-4', channel: forumThread };
+    assert.equal(aiSupport.shouldHandle(forumMessage), true, 'the forum opener was left unanswered');
+
+    // The intake answer is skipped without answers, without spending a model call.
+    const channel = {
+      id: 'ticket-auto-2',
+      client: { user: { id: 'bot' } },
+      send: async () => {},
+    };
+    assert.equal(await aiSupport.answerIntake(channel, { answers: [] }), false);
+  } finally {
+    AI.apiKey = previous;
+  }
+});
+
+test('the intake form is answered automatically when the ticket opens', async () => {
+  const aiSupport = require('../src/features/aiSupport');
+  const { AI } = require('../src/config');
+  const previousKey = AI.apiKey;
+  const previousFetch = global.fetch;
+  AI.apiKey = 'test-key';
+  aiSupport.resetState();
+
+  const sent = [];
+  const channel = {
+    id: 'ticket-intake',
+    topic: `ticket-opener:${OPENER} type:general-support`,
+    client: { user: { id: 'bot' } },
+    guild: { id: 'guild', roles: { cache: new Collection() } },
+    sendTyping: async () => {},
+    send: async (payload) => {
+      sent.push(payload.content);
+      return payload;
+    },
+    messages: { fetch: async () => new Collection() },
+  };
+
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({ reply: 'Please update your graphics driver first.', needs_escalation: false }),
+  });
+
+  try {
+    const answered = await aiSupport.answerIntake(channel, {
+      answers: [{ question: 'What is your client version?', answer: '1.21.11' }],
+      openerId: OPENER,
+    });
+
+    assert.equal(answered, true);
+    assert.deepEqual(sent, ['Please update your graphics driver first.']);
+  } finally {
+    global.fetch = previousFetch;
+    AI.apiKey = previousKey;
+  }
+});
+
 test('a new forum post with an old client version is answered once', async () => {
   const channel = {
     id: 'post-1',
