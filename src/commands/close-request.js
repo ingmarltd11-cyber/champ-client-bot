@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { isStaff } = require('../utils/permissions');
 const tickets = require('../features/tickets');
 
 function reply(interaction, content) {
@@ -9,11 +8,11 @@ function reply(interaction, content) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('close-request')
-    .setDescription('Ask staff to close this ticket, with Accept and Deny buttons.')
+    .setDescription('Ask the ticket opener to confirm closing (support and developer only).')
     .addStringOption((option) =>
       option
         .setName('reason')
-        .setDescription('Why the ticket can be closed')
+        .setDescription('Why the ticket can be closed; {user} becomes a mention of the opener')
         .setRequired(false)
         .setMaxLength(300)
     ),
@@ -28,17 +27,19 @@ module.exports = {
       return reply(interaction, '❌ This is not a ticket channel or ticket post.');
     }
 
-    if (interaction.user.id !== openerId && !isStaff(interaction.member)) {
-      return reply(interaction, '❌ Only the ticket opener or staff can ask to close this ticket.');
+    // A close request always comes from staff; the opener only answers it.
+    if (!tickets.isTicketStaff(interaction.member)) {
+      return reply(interaction, '❌ Only support and developer can send a close request.');
     }
 
     const reason =
       interaction.options.getString('reason')?.trim() ||
-      (interaction.user.id === openerId
-        ? 'The opener asked to close the ticket.'
-        : 'Staff asked the opener to confirm closing the ticket.');
+      'Staff asked the opener to confirm closing the ticket.';
 
-    await tickets.postCloseRequest(interaction.channel, interaction.guild, interaction.user, reason);
-    return reply(interaction, '✅ The close request has been posted. Staff can accept or deny it.');
+    await tickets.postCloseRequest(interaction.channel, interaction.guild, interaction.user, reason, openerId);
+    return reply(
+      interaction,
+      '✅ The close request has been posted. The ticket opener is pinged and can accept or deny it.'
+    );
   },
 };

@@ -9,8 +9,8 @@ const {
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
-const { ROLES, STAFF_ROLE_NAMES, TICKETS, BRAND_COLOR } = require('../config');
-const { findRole, isStaff, normalizeName } = require('../utils/permissions');
+const { ROLES, TICKET_STAFF_ROLE_NAMES, TICKETS, BRAND_COLOR } = require('../config');
+const { findRole, isAdmin, roleMatchesName, normalizeName } = require('../utils/permissions');
 const { applyTicketActions } = require('./ticketRoles');
 const { verifiedRoleNames } = require('./verify');
 const { loadCategories, MAX_QUESTIONS, MAX_MESSAGE_LENGTH, buttonStyle } = require('../utils/ticketCategories');
@@ -51,7 +51,7 @@ const UNVERIFIED_CATEGORY = {
   welcomeMessage:
     'You are not verified yet, so you can open one ticket at a time to ask staff for help.\n\n' +
     'Tell us what you need and a staff member will answer as soon as possible.\n' +
-    'When you are done, close the ticket; you can open a new one later or verify with `/verify`.',
+    'When the issue is solved, a staff member closes the ticket for you; you can open a new one later or verify with `/verify`.',
 };
 
 // Buttons from a multi-panel setup use "panelId:categoryId"; old panels only send the
@@ -72,11 +72,38 @@ function findCategoryInPanel(panelId, categoryId) {
 // Channels that are already being closed, so a double click cannot schedule two deletes.
 const closing = new Set();
 
-function staffOverwrites(guild) {
-  // The support role is always included, so it always has ticket access.
-  return STAFF_ROLE_NAMES.map((name) => findRole(guild, name))
+// Only support and developer see tickets, next to the member who opened it. Every other role
+// keeps no access at all, so a ticket is never readable by media, partners or other staff.
+function ticketStaffOverwrites(guild) {
+  return TICKET_STAFF_ROLE_NAMES.map((name) => findRole(guild, name))
     .filter(Boolean)
     .map((role) => ({ id: role.id, allow: STAFF_ACCESS }));
+}
+
+// Support and developer may request and accept a closure; the server owner and other admins
+// always can, because Discord gives administrators every channel anyway.
+function isTicketStaff(member) {
+  if (!member) return false;
+  if (isAdmin(member)) return true;
+  return TICKET_STAFF_ROLE_NAMES.some((name) =>
+    member.roles?.cache?.some((role) => roleMatchesName(role, name))
+  );
+}
+
+// Every ticket text may contain {user}: it always becomes a real mention of the ticket opener,
+// so the opener is pinged wherever the text is posted (welcome message, close request, ...).
+function renderTicketText(text, openerId) {
+  const value = String(text ?? '');
+  if (!value || !openerId) return value;
+  return value.replace(/\{user\}/gi, `<@${openerId}>`);
+}
+
+function ticketMentions(openerId, roleIds = []) {
+  return {
+    parse: [],
+    users: openerId ? [String(openerId)] : [],
+    roles: roleIds,
+  };
 }
 
 async function ensureTicketCategory(guild) {
@@ -91,7 +118,7 @@ async function ensureTicketCategory(guild) {
     type: ChannelType.GuildCategory,
     permissionOverwrites: [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      ...staffOverwrites(guild),
+      ...ticketStaffOverwrites(guild),
     ],
     reason: 'Ticket category created by Champ Client Bot',
   });
@@ -111,7 +138,7 @@ function ticketOverwrites(guild, clientId, userId) {
     { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
     { id: userId, allow: USER_ACCESS },
     { id: clientId, allow: STAFF_ACCESS },
-    ...staffOverwrites(guild),
+    ...ticketStaffOverwrites(guild),
   ];
 }
 
@@ -183,8 +210,11 @@ async function createTicket(interaction, category, answers, panelId = DEFAULT_PA
     const embed = new EmbedBuilder()
       .setTitle(`${category.emoji ?? ''} ${category.label}`.trim())
       .setDescription(
-        category.welcomeMessage ||
-          `Thanks for opening a ticket, ${user}.\n\nDescribe your issue in as much detail as you can. A staff member will be with you shortly.`
+        renderTicketText(
+          category.welcomeMessage ||
+            'Thanks for opening a ticket, {user}.\n\nDescribe your issue in as much detail as you can. A staff member will be with you shortly.',
+          user.id
+        )
       )
       .setColor(BRAND_COLOR)
       .setTimestamp();
@@ -201,7 +231,12 @@ async function createTicket(interaction, category, answers, panelId = DEFAULT_PA
         .setStyle(buttonStyle(TICKETS.buttonColors.close))
     );
 
-    await channel.send({ content: `${user}`, embeds: [embed], components: [row] });
+    await channel.send({
+      content: `<@${user.id}>`,
+      embeds: [embed],
+      components: [row],
+      allowedMentions: ticketMentions(user.id),
+    });
 
     // The ticket assistant answers the form right away, for example when the client version is
     // not one we support, and offers 👍 / 👎 so the opener can confirm or explain. Without such
@@ -368,7 +403,10 @@ async function closeTicket(channel, closer, reason) {
   const thread = Boolean(channel.isThread?.());
   const seconds = TICKETS.closeDelaySeconds;
   await channel.send({
-    content: `🔒 Ticket closed by ${closer}.\n**Reason:** ${reason}\n${
+    content: `🔒 Ticket closed by ${closer}.\n**Reason:** ${renderTicketText(
+      reason,
+      ticketOpenerId(channel)
+    )}\n${
       thread ? 'This post is now locked and archived.' : `This channel will be deleted in ${seconds} seconds.`
     }`,
     allowedMentions: { parse: [] },
@@ -398,15 +436,16 @@ async function closeTicket(channel, closer, reason) {
   }, seconds * 1000);
 }
 
-// Anyone who can see a ticket can ask to close it, but a reason is required.
+// Only ticket staff (support and developer) start a close request, and a reason is required.
 async function requestClose(interaction) {
   const openerId = ticketOpenerId(interaction.channel);
   if (!openerId) {
     return interaction.reply({ content: '❌ This is not a ticket channel.', flags: MessageFlags.Ephemeral });
   }
-  if (interaction.user.id !== openerId && !isStaff(interaction.member)) {
+  if (!isTicketStaff(interaction.member)) {
     return interaction.reply({
-      content: '❌ Only the ticket opener or staff can close this ticket.',
+      content:
+        '❌ Only support and developer can close a ticket. A staff member closes it for you when it is solved.',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -425,14 +464,19 @@ async function requestClose(interaction) {
   return interaction.showModal(modal);
 }
 
-// Posts the close request staff can accept or deny. Used by the ticket button, /close-request
-// and the 👍 on the ticket assistant's advice.
-async function postCloseRequest(channel, guild, requester, reason) {
-  const supportRole = findRole(guild, ROLES.support);
+// Posts a close request. Only support and developer start one, and the opener is pinged so they
+// see it and can accept or deny. {user} in the reason becomes a mention of the opener too.
+async function postCloseRequest(channel, guild, requester, reason, openerId = ticketOpenerId(channel)) {
+  const staffRoles = TICKET_STAFF_ROLE_NAMES.map((name) => findRole(guild, name)).filter(Boolean);
   const embed = new EmbedBuilder()
     .setTitle('Close request')
-    .setDescription(`${requester} asks to close this ticket. Staff can accept or deny the request.`)
-    .addFields({ name: 'Reason', value: reason })
+    .setDescription(
+      renderTicketText(
+        `${requester} would like to close this ticket.\n\n{user}, do you agree? **Accept close** closes it, **Deny** keeps it open.`,
+        openerId
+      )
+    )
+    .addFields({ name: 'Reason', value: renderTicketText(reason, openerId) })
     .setColor(BRAND_COLOR)
     .setTimestamp();
 
@@ -448,13 +492,17 @@ async function postCloseRequest(channel, guild, requester, reason) {
   );
 
   return channel.send({
-    content: supportRole ? `${supportRole}` : undefined,
+    content: [openerId ? `<@${openerId}>` : '', ...staffRoles.map((role) => `${role}`)]
+      .filter(Boolean)
+      .join(' '),
     embeds: [embed],
     components: [row],
+    allowedMentions: ticketMentions(openerId, staffRoles.map((role) => role.id)),
   });
 }
 
-// Staff close at once. The opener's request goes to staff as a close request with Accept/Deny buttons.
+// The Close Ticket button asks ticket staff for a reason and posts a close request, so the
+// opener is always pinged before the ticket disappears. The opener cannot close it themselves.
 async function handleCloseModal(interaction) {
   const channel = interaction.channel;
   const openerId = ticketOpenerId(channel);
@@ -462,23 +510,34 @@ async function handleCloseModal(interaction) {
     return interaction.reply({ content: '❌ This is not a ticket channel.', flags: MessageFlags.Ephemeral });
   }
 
+  if (!isTicketStaff(interaction.member)) {
+    return interaction.reply({
+      content: '❌ Only support and developer can close a ticket.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
   const reason = interaction.fields.getTextInputValue('reason').trim();
   if (!reason) {
     return interaction.reply({ content: '❌ A reason is required.', flags: MessageFlags.Ephemeral });
   }
 
-  if (isStaff(interaction.member)) {
-    await interaction.reply({ content: 'Closing this ticket.', flags: MessageFlags.Ephemeral });
-    return closeTicket(channel, interaction.user, reason);
-  }
-
-  await postCloseRequest(channel, interaction.guild, interaction.user, reason);
-  return interaction.reply({ content: '✅ Your close request has been sent to staff.', flags: MessageFlags.Ephemeral });
+  await postCloseRequest(channel, interaction.guild, interaction.user, reason, openerId);
+  return interaction.reply({
+    content: '✅ Close request posted. The ticket opener is pinged and can accept or deny it.',
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
+// The opener decides about the request staff made; support and developer may also accept it.
 async function acceptCloseRequest(interaction) {
-  if (!isStaff(interaction.member)) {
-    return interaction.reply({ content: '❌ Only staff can accept close requests.', flags: MessageFlags.Ephemeral });
+  const openerId = ticketOpenerId(interaction.channel);
+  const allowed = interaction.user.id === openerId || isTicketStaff(interaction.member);
+  if (!allowed) {
+    return interaction.reply({
+      content: '❌ Only the ticket opener or support/developer can answer a close request.',
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   const field = interaction.message.embeds[0]?.fields?.find((f) => f.name === 'Reason');
@@ -489,8 +548,13 @@ async function acceptCloseRequest(interaction) {
 }
 
 async function denyCloseRequest(interaction) {
-  if (!isStaff(interaction.member)) {
-    return interaction.reply({ content: '❌ Only staff can deny close requests.', flags: MessageFlags.Ephemeral });
+  const openerId = ticketOpenerId(interaction.channel);
+  const allowed = interaction.user.id === openerId || isTicketStaff(interaction.member);
+  if (!allowed) {
+    return interaction.reply({
+      content: '❌ Only the ticket opener or support/developer can answer a close request.',
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   return interaction.update({
@@ -499,8 +563,9 @@ async function denyCloseRequest(interaction) {
   });
 }
 
-// Thumbs up on the ticket advice asks staff to close the ticket; thumbs down asks the opener
-// what still fails. Only the ticket opener votes, so staff keep using /close and /close-request.
+// Thumbs up on the ticket advice tells staff the opener is helped (only staff close a ticket, so
+// this pings them instead of posting a close request); thumbs down asks what still fails. Only
+// the ticket opener votes.
 async function handleTriageReaction(reaction, user) {
   if (!user || user.bot) return false;
 
@@ -516,12 +581,16 @@ async function handleTriageReaction(reaction, user) {
   const emoji = reaction.emoji?.name;
 
   if (emoji === triage.HELPFUL) {
-    await postCloseRequest(
-      channel,
-      message.guild,
-      user,
-      'The ticket advice worked (👍 from the opener).'
+    const staffRoles = TICKET_STAFF_ROLE_NAMES.map((name) => findRole(message.guild, name)).filter(
+      Boolean
     );
+    await channel.send({
+      content:
+        `👍 ${user} says the advice solved it. A staff member can close this ticket with ` +
+        `/close or the Close Ticket button.` +
+        (staffRoles.length ? `\n${staffRoles.join(' ')}` : ''),
+      allowedMentions: ticketMentions(null, staffRoles.map((role) => role.id)),
+    });
     return true;
   }
 
@@ -567,6 +636,8 @@ module.exports = {
   openUnverifiedTicket,
   handleFormSubmit,
   requestClose,
+  isTicketStaff,
+  ticketOverwrites,
   handleCloseModal,
   acceptCloseRequest,
   denyCloseRequest,

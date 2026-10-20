@@ -64,8 +64,8 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/ticket-panels create\|list\|remove\|set-default` | Admin | Manage multiple saved panels |
 | `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
 | `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
-| `/close [reason]` | Staff / opener | Staff close the ticket at once; the opener sends a close request instead |
-| `/close-request [reason]` | Staff / opener | Post the close request with Accept and Deny buttons |
+| `/close [reason]` | `support` / `developer` | Close the ticket at once |
+| `/close-request [reason]` | `support` / `developer` | Ping the opener and ask them to accept or deny the close request |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
 | `/learn add\|lesson\|list\|remove\|clear\|channel` | Admin / trusted | Teach replies, reactions and lessons; show the training channel |
 | `/setrole user role` | Admin / trusted | Give the role now and every time that member opens a ticket |
@@ -152,10 +152,10 @@ When a ticket opens, the bot reads the answers of the form and answers right awa
 
 That answer is posted with a 👍 and a 👎 reaction, and only the opener can use them:
 
-- 👍 asks staff to close the ticket: the bot posts the normal close request with **Accept close** and **Deny**.
+- 👍 tells the ticket staff the answer solved it (the staff roles are pinged); only staff close the ticket.
 - 👎 asks the opener what exactly still fails, so they can send the error and staff can take over.
 
-Staff can close a ticket with `/close`, or with the **Close Ticket** button. The opener who runs `/close` (or the button) sends a close request instead; only staff can accept it. A close request can also be posted by hand with `/close-request [reason]`. Both commands work in a normal ticket channel and in a forum post: a forum post is locked and archived instead of deleted, and every ticket still gets its transcript in DM.
+Tickets are visible to `support`, `developer` and the member who opened the ticket, and to nobody else. Only support and developer close a ticket or start a close request, with `/close`, `/close-request [reason]` or the **Close Ticket** button. A close request pings the opener and offers **Accept close** / **Deny**: the opener accepts it, and the opener cannot close the ticket themselves. Anywhere a ticket text contains `{user}`, the bot replaces it with a real mention of the ticket opener, including in the close reason. Both commands work in a normal ticket channel and in a forum post: a forum post is locked and archived instead of deleted, and every ticket still gets its transcript in DM.
 
 New posts in a forum channel (for example a bug-report forum) get the same version check on the opening post. A reply inside the post does not trigger it again, and a post that does not mention a client version is left alone.
 

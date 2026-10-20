@@ -82,7 +82,7 @@ async function postTriage(channel, { answers = [], content = '' } = {}) {
       [
         suggestion.body,
         '',
-        'Did this solve it? 👍 asks staff to close the ticket, 👎 lets you tell us what still fails.',
+        'Did this solve it? 👍 tells staff it worked (they close the ticket), 👎 lets you tell us what still fails.',
       ].join('\n')
     )
     .setColor(BRAND_COLOR)

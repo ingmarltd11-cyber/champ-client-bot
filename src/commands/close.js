@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { isStaff } = require('../utils/permissions');
 const tickets = require('../features/tickets');
 
 function reply(interaction, content) {
@@ -9,11 +8,11 @@ function reply(interaction, content) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('close')
-    .setDescription('Close this ticket. Staff close it at once; the opener sends a close request.')
+    .setDescription('Close this ticket (support and developer only).')
     .addStringOption((option) =>
       option
         .setName('reason')
-        .setDescription('Why the ticket can be closed')
+        .setDescription('Why the ticket can be closed; {user} becomes a mention of the opener')
         .setRequired(false)
         .setMaxLength(300)
     ),
@@ -28,21 +27,17 @@ module.exports = {
       return reply(interaction, '❌ This is not a ticket channel or ticket post.');
     }
 
-    const staff = isStaff(interaction.member);
-    if (!staff && interaction.user.id !== openerId) {
-      return reply(interaction, '❌ Only the ticket opener or staff can close this ticket.');
+    // Only support and developer close tickets. The opener never closes their own ticket.
+    if (!tickets.isTicketStaff(interaction.member)) {
+      return reply(
+        interaction,
+        '❌ Only support and developer can close a ticket. A staff member closes it for you when it is solved.'
+      );
     }
 
-    const given = interaction.options.getString('reason')?.trim();
-    const reason = given || (staff ? 'Closed with /close.' : 'The opener asked to close the ticket.');
+    const reason = interaction.options.getString('reason')?.trim() || 'Closed with /close.';
 
-    // Staff do not need permission from anyone, so their /close really closes the ticket.
-    if (staff) {
-      await reply(interaction, '🔒 Closing this ticket.');
-      return tickets.closeTicket(interaction.channel, interaction.user, reason);
-    }
-
-    await tickets.postCloseRequest(interaction.channel, interaction.guild, interaction.user, reason);
-    return reply(interaction, '✅ Your close request has been sent to staff.');
+    await reply(interaction, '🔒 Closing this ticket.');
+    return tickets.closeTicket(interaction.channel, interaction.user, reason);
   },
 };

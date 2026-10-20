@@ -673,7 +673,7 @@ test('the advice is posted with a thumb up and a thumb down', async () => {
   assert.equal(quiet.sent.length, 0);
 });
 
-test('only the opener votes on the advice, and 👍 asks staff to close the ticket', async () => {
+test('only the opener votes on the advice, and 👍 tells staff to close it', async () => {
   const channel = makeAdviceChannel(OPENER);
   const advice = await triage.postTriage(channel, { content: 'client: 1.21.10' });
 
@@ -682,7 +682,7 @@ test('only the opener votes on the advice, and 👍 asks staff to close the tick
     { id: 'staff-1', bot: false }
   );
   assert.equal(staffVote, false);
-  assert.equal(channel.sent.length, 1, 'a stranger must not trigger a close request');
+  assert.equal(channel.sent.length, 1, 'a stranger must not react');
 
   const vote = await tickets.handleTriageReaction(
     { emoji: { name: '👍' }, message: advice },
@@ -690,8 +690,9 @@ test('only the opener votes on the advice, and 👍 asks staff to close the tick
   );
   assert.equal(vote, true);
   assert.equal(channel.sent.length, 2);
-  assert.equal(channel.sent[1].embeds[0].data.title, 'Close request');
-  assert.equal(channel.sent[1].components[0].components.length, 2);
+  // A thumb up is not a close request: only staff close tickets, so it asks staff instead.
+  assert.equal(channel.sent[1].embeds, undefined);
+  assert.match(channel.sent[1].content, /staff member can close this ticket/i);
 });
 
 test('a thumb down asks what still fails', async () => {
@@ -707,18 +708,65 @@ test('a thumb down asks what still fails', async () => {
   assert.match(channel.sent[1].content, /what exactly went wrong/i);
 });
 
-test('/close asks staff for the opener and /close-request posts the request', async () => {
-  const channel = makeAdviceChannel(OPENER);
-  const interaction = makeCommandInteraction(channel, { opener: OPENER });
+test('only support, developer, the opener and the bot can see a ticket', () => {
+  const roles = new Collection([
+    ['1', { id: '1', name: 'support' }],
+    ['2', { id: '2', name: 'developer' }],
+    ['3', { id: '3', name: 'media' }],
+    ['4', { id: '4', name: 'owner' }],
+    ['5', { id: '5', name: '@everyone' }],
+  ]);
+  const guild = { roles: { cache: roles, everyone: roles.get('5') } };
 
-  await closeCommand.execute(interaction);
-  assert.match(interaction.replies[0].content, /close request has been sent/i);
-  assert.equal(channel.sent[0].embeds[0].data.title, 'Close request');
+  const overwrites = tickets.ticketOverwrites(guild, 'bot-1', OPENER);
+  const ids = overwrites.map((entry) => entry.id);
+
+  assert.deepEqual(ids, ['5', OPENER, 'bot-1', '1', '2']);
+  // Everyone else is locked out, and the opener only gets the user permissions.
+  assert.ok(overwrites[0].deny.includes(PermissionFlagsBits.ViewChannel));
+  assert.equal(overwrites[1].allow.includes(PermissionFlagsBits.ManageChannels), false);
+  assert.ok(overwrites[3].allow.includes(PermissionFlagsBits.ManageChannels));
+  assert.ok(overwrites[4].allow.includes(PermissionFlagsBits.ManageChannels));
+});
+
+test('the opener cannot close or request a close', async () => {
+  const channel = makeAdviceChannel(OPENER);
+  const closeInteraction = makeCommandInteraction(channel, { opener: OPENER });
+  await closeCommand.execute(closeInteraction);
+  assert.match(closeInteraction.replies[0].content, /only support and developer can close/i);
+  assert.equal(channel.sent.length, 0, 'the opener must not close the ticket');
+
+  const requestInteraction = makeCommandInteraction(channel, { opener: OPENER });
+  await closeRequestCommand.execute(requestInteraction);
+  assert.match(requestInteraction.replies[0].content, /only support and developer/i);
+  assert.equal(channel.sent.length, 0, 'the opener must not post a close request');
+});
+
+test('staff close requests ping the opener and turn {user} into a mention', async () => {
+  // A stranger with neither support nor developer is refused, like the opener.
+  const channel = makeAdviceChannel(OPENER);
+  const stranger = makeCommandInteraction(channel, { opener: '333333333333333333' });
+  await closeRequestCommand.execute(stranger);
+  assert.match(stranger.replies[0].content, /only support and developer/i);
+  assert.equal(channel.sent.length, 0);
 
   const requestChannel = makeAdviceChannel(OPENER);
-  const request = makeCommandInteraction(requestChannel, { opener: OPENER, options: { reason: 'Solved' } });
+  const request = makeCommandInteraction(requestChannel, {
+    opener: '222222222222222222',
+    staff: true,
+    options: { reason: 'Solved for {user}' },
+  });
   await closeRequestCommand.execute(request);
-  assert.equal(requestChannel.sent[0].embeds[0].data.fields[0].value, 'Solved');
+
+  const posted = requestChannel.sent[0];
+  const embed = posted.embeds[0].data;
+  assert.equal(embed.title, 'Close request');
+  assert.equal(embed.fields[0].value, `Solved for <@${OPENER}>`);
+  // The opener is pinged, and only the opener plus ticket staff roles may be mentioned.
+  assert.match(posted.content, new RegExp(`<@${OPENER}>`));
+  assert.deepEqual(posted.allowedMentions.users, [OPENER]);
+  assert.equal(posted.components[0].components.length, 2);
+  assert.match(request.replies[0].content, /opener is pinged/i);
 });
 
 test('/close refuses a channel that is not a ticket', async () => {

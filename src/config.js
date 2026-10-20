@@ -20,6 +20,10 @@ const STAFF_ROLE_NAMES = [
   ROLES.support,
 ];
 
+// Only these roles can see a ticket and request its closure, next to the member who opened it.
+// Administrators always see every channel, which Discord itself enforces.
+const TICKET_STAFF_ROLE_NAMES = [ROLES.support, ROLES.developer];
+
 // The only roles allowed to post in #announcements.
 const ANNOUNCEMENT_EXEMPT_ROLE_NAMES = [
   ROLES.developer,
@@ -126,6 +130,7 @@ function assertEnv(names) {
 module.exports = {
   ROLES,
   STAFF_ROLE_NAMES,
+  TICKET_STAFF_ROLE_NAMES,
   ANNOUNCEMENT_EXEMPT_ROLE_NAMES,
   VERIFIED_VIEW_ROLE_NAMES,
   CHANNELS,
