@@ -120,7 +120,10 @@ module.exports = {
     }
 
     if (sub === 'channel') {
-      const channel = await learning.ensureLearningChannel(interaction.guild, { force: true });
+      const channel = await learning.ensureLearningChannel(interaction.guild, {
+        force: true,
+        memberId: interaction.user.id,
+      });
       if (!channel) {
         return reply(
           interaction,
@@ -128,7 +131,11 @@ module.exports = {
             'or just talk to me in a channel where you are an administrator.'
         );
       }
-      return reply(interaction, `✅ Training channel: <#${channel.id}>. Teach me there in your own words.`);
+      return reply(
+        interaction,
+        `✅ Training channel: <#${channel.id}>. I gave you access to it.\n` +
+          'Ping me there (`@bot ...`) and say what I should learn, or use `/learn add`.'
+      );
     }
 
     return reply(interaction, '❌ Unknown subcommand.');

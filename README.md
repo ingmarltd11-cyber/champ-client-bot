@@ -138,7 +138,7 @@ At startup the bot creates `🧠│ai-training` (only staff and administrators c
 - `reageer met 🔥 op elk bericht met fire` → it adds that reaction instead of a reply
 - `onthou dat we nooit korting geven` → a lesson, added to what the assistant knows
 
-The assistant turns those sentences into saved rules with its own tools, so a rule survives a restart and needs no mention, no slash command and no model call. The equivalent commands are `/learn add trigger:<text|*> response:<text> [react:true]`, `/learn lesson`, `/learn list`, `/learn remove`, `/learn clear`, and `/learn channel` to recreate or show the channel. A learned rule answers first; when none matches, the normal AI support handles the message.
+The assistant turns those sentences into saved rules with its own tools, so a rule survives a restart and needs no mention, no slash command and no model call. The equivalent commands are `/learn add trigger:<text|*> response:<text> [react:true]`, `/learn lesson`, `/learn list`, `/learn remove`, `/learn clear`, and `/learn channel` to recreate the channel, refresh its permissions and give yourself access. A learned rule answers first; when none matches, the normal AI support handles the message.
 
 ## Ticket actions
 

@@ -10,7 +10,7 @@ process.env.DATA_DIR = DATA_DIR;
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Collection, PermissionFlagsBits } = require('discord.js');
+const { ChannelType, Collection, PermissionFlagsBits } = require('discord.js');
 
 const { findRole, findRoleAny, isStaff } = require('../src/utils/permissions');
 const verify = require('../src/features/verify');
@@ -444,6 +444,79 @@ test('applying ticket actions gives the roles to the opener and skips the imposs
   assert.deepEqual(result.added, ['buyer']);
   assert.equal(owned.has('role-buyer'), true);
   assert.equal(result.failed.length, 2);
+});
+
+test('the training channel is created once, gets instructions and is remembered', async () => {
+  resetSettings();
+  const created = [];
+  const guild = {
+    id: 'guild',
+    roles: {
+      everyone: { id: 'everyone' },
+      cache: new Collection([['role-support', { id: 'role-support', name: 'Support', position: 1 }]]),
+    },
+    members: { me: { id: 'bot' } },
+    channels: {
+      cache: new Collection(),
+      create: async (options) => {
+        const channel = {
+          id: 'channel-training',
+          name: options.name,
+          type: options.type,
+          sent: [],
+          send: async (payload) => channel.sent.push(payload.content),
+          permissionOverwrites: { edit: async () => {} },
+        };
+        created.push(options);
+        guild.channels.cache.set(channel.id, channel);
+        return channel;
+      },
+    },
+  };
+
+  const first = await learning.ensureLearningChannel(guild);
+  assert.equal(created.length, 1);
+  assert.match(first.name, /ai-training/);
+  assert.equal(first.type, ChannelType.GuildText);
+  assert.equal(settings.getLearningChannelId(), 'channel-training');
+  assert.match(first.sent[0], /AI training channel/);
+
+  const second = await learning.ensureLearningChannel(guild);
+  assert.equal(created.length, 1, 'the channel must not be created twice');
+  assert.equal(second.id, 'channel-training');
+});
+
+test('an existing training channel is reused and the caller gets access', async () => {
+  resetSettings();
+  const edits = [];
+  const existing = {
+    id: 'channel-old',
+    name: '🧠│ai-training',
+    type: ChannelType.GuildText,
+    permissionOverwrites: {
+      edit: async (target, allow) => edits.push({ target, allow }),
+    },
+  };
+  const guild = {
+    id: 'guild',
+    roles: {
+      everyone: { id: 'everyone' },
+      cache: new Collection([['role-support', { id: 'role-support', name: 'Support', position: 1 }]]),
+    },
+    members: { me: { id: 'bot' } },
+    channels: {
+      cache: new Collection([[existing.id, existing]]),
+      create: async () => {
+        throw new Error('the existing channel should be reused');
+      },
+    },
+  };
+
+  const channel = await learning.ensureLearningChannel(guild, { force: true, memberId: 'someone' });
+  assert.equal(channel.id, 'channel-old');
+  assert.equal(settings.getLearningChannelId(), 'channel-old');
+  assert.ok(edits.some((entry) => entry.target === 'someone'), 'the caller did not get access');
+  assert.ok(edits.some((entry) => entry.target?.id === 'bot'), 'the bot did not get access');
 });
 
 test('an unverified member is not treated as verified', () => {

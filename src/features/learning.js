@@ -47,9 +47,36 @@ function learningOverwrites(guild) {
   return overwrites;
 }
 
+// Gives the bot, the staff roles and (when known) the person asking access to the channel,
+// so /learn channel always leaves you with a channel you can actually type in.
+async function grantLearningAccess(channel, guild, memberId) {
+  const allow = [
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.EmbedLinks,
+  ];
+
+  try {
+    const me = guild.members?.me;
+    if (me) await channel.permissionOverwrites.edit(me, { ...allow, ManageMessages: true });
+
+    for (const name of STAFF_ROLE_NAMES) {
+      const role = findRole(guild, name);
+      if (role) await channel.permissionOverwrites.edit(role, allow);
+    }
+
+    if (memberId) await channel.permissionOverwrites.edit(memberId, allow);
+  } catch (err) {
+    console.error('Could not update the training channel permissions:', err.message);
+  }
+
+  return channel;
+}
+
 // Finds or creates the training channel and remembers its ID. Never throws: without the
 // permission to create a channel the bot still works, the teaching commands keep working.
-async function ensureLearningChannel(guild, { force = false } = {}) {
+async function ensureLearningChannel(guild, { force = false, memberId = null } = {}) {
   if (!guild) return null;
 
   if (!force) {
@@ -65,6 +92,7 @@ async function ensureLearningChannel(guild, { force = false } = {}) {
   );
   if (existing) {
     settings.setLearningChannelId(existing.id);
+    if (force) await grantLearningAccess(existing, guild, memberId);
     return existing;
   }
 
@@ -81,6 +109,7 @@ async function ensureLearningChannel(guild, { force = false } = {}) {
     });
 
     settings.setLearningChannelId(channel.id);
+    if (memberId) await grantLearningAccess(channel, guild, memberId);
     await channel
       .send({ content: TRAINING_TEXT, allowedMentions: { parse: [] } })
       .catch((err) => console.error('Could not post the training instructions:', err.message));
@@ -167,6 +196,7 @@ module.exports = {
   CHANNEL_NAME,
   TRAINING_TEXT,
   ensureLearningChannel,
+  grantLearningAccess,
   isLearningChannel,
   handleLearnedRule,
   describeLearning,
