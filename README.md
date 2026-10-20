@@ -106,17 +106,6 @@ The one hard limit: it never gives code, never explains how to get code, and nev
 
 The website runs the shared answer engine: Discord sends its questions to `https://champ-site-psi.vercel.app/api/ai/chat` (override with `SUPPORT_API_URL`), so the website chat and the bot answer from the same model and knowledge. When that endpoint is unavailable the bot falls back to its own model, which is also what powers the trusted-user actions. The website's model key lives in Vercel as `GROQ_API_KEY` or `AI_API_KEY`; the bot's `AI_API_KEY` is only used for the fallback.
 
-### Learning in the training channel
-
-At startup the bot creates `🧠│ai-training` (only staff and administrators can see it) and posts short instructions. Ping the bot (`@bot ...`) when you talk to it there, because the assistant only answers mentions. Say what you want in your own words:
-
-- `reageer op elk bericht met poep` → it replies `poep` to **every message from everyone**, in every channel
-- `als iemand hallo zegt, antwoord met hey` → it replies `hey` to messages containing "hallo"
-- `reageer met 🔥 op elk bericht met fire` → it adds that reaction instead of a reply
-- `onthou dat we nooit korting geven` → a lesson, added to what the assistant knows
-
-The assistant turns those sentences into saved rules with its own tools, so a rule survives a restart and needs no mention, no slash command and no model call. The equivalent commands are `/learn add trigger:<text|*> response:<text> [react:true]`, `/learn lesson`, `/learn list`, `/learn remove`, `/learn clear`, and `/learn channel` to recreate or show the channel. A learned rule answers first; when none matches, the normal AI support handles the message.
-
 Its fallback answers come from your website, plus any `.md` or `.txt` files in `knowledge/website/` and `knowledge/mod/`. Set `AI_SITE_URLS` to the pages the bot may read (comma separated); each page is stripped to text, split by heading and matched to the question, and cached for 10 minutes. Only the URLs you list are fetched, so a question can never point it at another site. Pages that fail to load are skipped. See `knowledge/README.md` for the local documents.
 
 Set these variables (Railway → Variables):
@@ -139,6 +128,21 @@ Set these variables (Railway → Variables):
 | `AI_KNOWLEDGE_DIR` | no | Folder with the `website` and `mod` knowledge folders, defaults to `./knowledge` |
 
 Any OpenAI-compatible endpoint works, because the bot only calls `/chat/completions`.
+
+## Learning in the training channel
+
+At startup the bot creates `🧠│ai-training` (only staff and administrators can see it) and posts short instructions. Ping the bot (`@bot ...`) when you talk to it there, because the assistant only answers mentions. Say what you want in your own words:
+
+- `reageer op elk bericht met poep` → it replies `poep` to **every message from everyone**, in every channel
+- `als iemand hallo zegt, antwoord met hey` → it replies `hey` to messages containing "hallo"
+- `reageer met 🔥 op elk bericht met fire` → it adds that reaction instead of a reply
+- `onthou dat we nooit korting geven` → a lesson, added to what the assistant knows
+
+The assistant turns those sentences into saved rules with its own tools, so a rule survives a restart and needs no mention, no slash command and no model call. The equivalent commands are `/learn add trigger:<text|*> response:<text> [react:true]`, `/learn lesson`, `/learn list`, `/learn remove`, `/learn clear`, and `/learn channel` to recreate or show the channel. A learned rule answers first; when none matches, the normal AI support handles the message.
+
+## Ticket actions
+
+`/setrole user role` gives the role now **and** every time that member opens a ticket. `/ticket-actions add role [user] [panel]` does the same without the immediate role: leave `user` out for everyone, leave `panel` out for every panel. `/ticket-actions list` shows them, `remove` takes one away and `clear` removes a member's actions or everything. A role the bot cannot hand out (too high, managed by an integration, missing permission) is reported in the ticket instead of breaking it.
 
 ## Project structure
 
