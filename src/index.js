@@ -22,15 +22,17 @@ const { respondVerified } = require('./features/verify');
 const tickets = require('./features/tickets');
 const rolesDelete = require('./commands/setup-roles-delete');
 const serverDelete = require('./commands/setup-server-delete');
+const greeting = require('./features/greeting');
+const memberCount = require('./features/memberCount');
 
 assertEnv(REQUIRED_ENV);
 
 // Guilds + GuildMessages are needed for commands and the word filter.
 // MessageContent is a privileged intent: it must be enabled in the Developer Portal
-// (Bot -> Privileged Gateway Intents) or the word filter cannot read messages.
-// Server Members Intent is optional: it is needed to search/list members by name (the admin
-// AI tools). It must be enabled in the Developer Portal first, otherwise Discord rejects the
-// login, so it is opt-in and the member tools fall back to the cache without it.
+// (Bot -> Privileged Gateway Intents) or the word filter cannot read messages.  // Server Members Intent is optional: it is needed to search/list members by name (the admin
+  // AI tools), and for the welcome message and the member counter, which react to joins and
+  // leaves. It must be enabled in the Developer Portal first, otherwise Discord rejects the
+  // login, so it is opt-in and the member tools fall back to the cache without it.
 const intents = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
@@ -75,7 +77,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     console.error('Could not set up the AI training channel:', err.message);
   }
 
-  // /key and /manage only work for the owner role, so say which role that is at startup.
+  // The management commands only work for the owner role, so say which role that is at startup.
   try {
     const guild = await readyClient.guilds.fetch(process.env.GUILD_ID);
     const ownerRole = guild.roles.cache.find((role) =>
@@ -83,12 +85,47 @@ client.once(Events.ClientReady, async (readyClient) => {
     );
     console.log(
       ownerRole
-        ? `Owner commands (/key, /manage, setup): role "${ownerRole.name}"`
-        : `Owner commands (/key, /manage, setup): only the Discord server owner; ` +
-            `no role named ${OWNER_ROLE_NAMES.map((name) => `"${name}"`).join(' or ')} found`
+        ? `Owner commands (/key, /manage, /welcome, /membercount, setup): role "${ownerRole.name}"`
+        : `Owner commands (/key, /manage, /welcome, /membercount, setup): only the Discord ` +
+            `server owner; no role named ${OWNER_ROLE_NAMES.map((name) => `"${name}"`).join(' or ')} found`
     );
   } catch (err) {
     console.error('Could not check the owner role:', err.message);
+  }
+
+  // Welcome messages and the member counter react to joins and leaves, which needs the Server
+  // Members Intent: without it Discord sends no member events at all.
+  const welcomeChannelId = settings.getWelcomeSettings().channelId;
+  const statsChannelId = settings.getStatsSettings().channelId;
+  if ((welcomeChannelId || statsChannelId) && process.env.ENABLE_GUILD_MEMBERS_INTENT !== 'true') {
+    console.warn(
+      'Welcome messages / member counter are configured, but member events are off: enable ' +
+        '"Server Members Intent" in the Developer Portal and set ENABLE_GUILD_MEMBERS_INTENT=true.'
+    );
+  }
+
+  // The counter is corrected at startup and every 30 minutes, so a restart or a missed event
+  // does not leave a stale number in the channel name.
+  if (statsChannelId) {
+    try {
+      const guild = await readyClient.guilds.fetch(process.env.GUILD_ID);
+      const result = await memberCount.syncGuildCount(guild);
+      if (result.updated) console.log(`Member counter synced: ${result.name}`);
+      else if (!['not-configured', 'unchanged'].includes(result.reason)) {
+        console.warn(`Member counter not updated: ${result.reason}`);
+      }
+
+      const timer = setInterval(() => {
+        const current = readyClient.guilds.cache.get(process.env.GUILD_ID);
+        if (!current) return;
+        memberCount
+          .syncGuildCount(current)
+          .catch((err) => console.error('Member counter failed:', err.message));
+      }, 30 * 60 * 1000);
+      if (typeof timer.unref === 'function') timer.unref();
+    } catch (err) {
+      console.error('Could not sync the member counter:', err.message);
+    }
   }
 
   // Keeps the slash commands in sync with the code, so a new command exists after a deploy
@@ -133,6 +170,26 @@ client.on(Events.MessageReactionAdd, (reaction, user) => {
 client.on(Events.MessageUpdate, (_oldMessage, message) => {
   if (message.partial) return;
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
+});
+
+// A new member gets the custom welcome message, and the counter in the voice channel moves up.
+client.on(Events.GuildMemberAdd, (member) => {
+  greeting
+    .sendWelcome(member)
+    .then((result) => {
+      if (!result.sent) console.warn(`Welcome message not sent: ${result.reason}`);
+    })
+    .catch((err) => console.error('Welcome message failed:', err.message));
+
+  memberCount
+    .syncGuildCount(member.guild)
+    .catch((err) => console.error('Member counter failed:', err.message));
+});
+
+client.on(Events.GuildMemberRemove, (member) => {
+  memberCount
+    .syncGuildCount(member.guild)
+    .catch((err) => console.error('Member counter failed:', err.message));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

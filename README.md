@@ -16,7 +16,9 @@ Discord bot (discord.js v14, slash commands) for the Champ Client server.
 - **Ticket actions**: `/setrole user role` and `/ticket-actions add` give roles automatically when someone opens a ticket, for one member or for everyone, per panel or for every panel.
 - **License keys**: `/key generate` makes `CHAMP-XXXX-XXXX-XXXX-XXXX` keys in the website's `licenses` table, free to hand out or already linked to a customer's email. `/key list | revoke | restore | delete` manages them.
 - **Server management**: `/manage` creates and deletes channels, categories and roles, edits roles, assigns and removes them, and sets channel permissions per role or member.
-- **Owner only**: `/key`, `/manage` and every setup command are reserved for the `owner` role (and the Discord server owner). Everyone else is refused, even with Administrator.
+- **Welcome message**: `/welcome` picks the channel and the custom text sent when someone joins, with `{user}`, `{name}`, `{display}`, `{server}`, `{count}` and `{created}` filled in. Bots are never welcomed, and a message that contains `@everyone` never pings the server.
+- **Member counter**: `/membercount` keeps a voice channel name in sync with the member count (on join, on leave, at startup and every 30 minutes), spaced out for Discord's channel rename rate limit.
+- **Owner only**: `/key`, `/manage`, `/welcome`, `/membercount` and every setup command are reserved for the `owner` role (and the Discord server owner). Everyone else is refused, even with Administrator.
 - **Emergency brake**: `/ai-stop` stops every AI admin action at once; `/ai-start` gives them back.
 
 ## Setup
@@ -37,7 +39,7 @@ cp .env.example .env   # Windows: copy the file manually
 ### Discord Developer Portal
 
 - Bot -> **Privileged Gateway Intents** -> enable **Message Content Intent** (required by the word filter).
-- Optional: enable **Server Members Intent** and set `ENABLE_GUILD_MEMBERS_INTENT=true` so the admin AI can list/search members by name. Without it, names are matched against the member cache and mentions/user IDs still work.
+- Optional: enable **Server Members Intent** and set `ENABLE_GUILD_MEMBERS_INTENT=true` so the admin AI can list/search members by name, and so the welcome message and the member counter receive join and leave events. Without it, names are matched against the member cache, and the welcome message and counter are not updated by joins or leaves (the counter is only corrected at startup and on its 30 minute refresh).
 - Invite the bot with the `bot` and `applications.commands` scopes and at least: Manage Channels, Manage Roles, Manage Messages, Kick Members, Ban Members, Moderate Members, Create Invite, View Channels, Send Messages, Embed Links, Attach Files, Read Message History.
 - The bot's role must sit above the roles it manages (needed for `/verify` and the AI role tools).
 
@@ -71,6 +73,8 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/manage channel-create\|channel-delete\|category-create` | Owner | Create channels (text, voice, forum, announcement) and categories, delete them with `confirm: true` |
 | `/manage role-create\|role-edit\|role-delete\|role-assign\|role-remove` | Owner | Create, recolour, rename, delete, assign and remove roles |
 | `/manage perms channel [role] [user] [allow] [deny] [reset]` | Owner | Set or remove a channel permission overwrite, e.g. `allow: view,send` |
+| `/welcome channel\|message\|test\|show\|disable` | Owner | Pick the join channel and write the custom welcome message |
+| `/membercount channel\|format\|update\|show\|disable` | Owner | Keep a voice channel showing the member count |
 | `/key generate plan\|list\|revoke\|restore\|delete` | Owner | Create and manage license keys |
 | `/botmessage channel info` | Owner | Post a message as the bot |
 | `/ticket-panel [channel] [panel] [title] [description] [categories] [save]` | Owner | Post a panel; add a new panel name + `save: true` to keep it |
@@ -161,9 +165,37 @@ The assistant turns those sentences into saved rules with its own tools, so a ru
 
 `/setrole user role` gives the role now **and** every time that member opens a ticket. `/ticket-actions add role [user] [panel]` does the same without the immediate role: leave `user` out for everyone, leave `panel` out for every panel. `/ticket-actions list` shows them, `remove` takes one away and `clear` removes a member's actions or everything. A role the bot cannot hand out (too high, managed by an integration, missing permission) is reported in the ticket instead of breaking it.
 
+## Welcome message and member counter
+
+One channel receives the welcome message, written by the owner:
+
+```
+/welcome channel channel:#welcome
+/welcome message text:👋 Welcome {user} to **{server}**! You are member **#{count}**.\nRead the rules first.
+/welcome test          # posts it now, as a preview
+/welcome show          # the saved channel, text and a preview
+/welcome disable       # stop welcoming; the text is kept
+```
+
+Placeholders: `{user}` (mention, the only mention that may ping), `{mention}`, `{name}` (account name), `{display}` (server display name), `{tag}`, `{id}`, `{server}`, `{count}` and `{created}` (account age as a Discord date). A literal `\n` becomes a line break, and text Discord cannot render is left alone. Bots are never welcomed.
+
+The counter is a voice channel the bot renames:
+
+```
+/membercount channel channel:#Members lock:true
+/membercount format text:👥 Members: {count}
+/membercount update    # refresh now
+/membercount show
+/membercount disable
+```
+
+`lock: true` (the default) denies **Connect** for `@everyone`, so nobody can sit in the counter channel. Discord allows two channel renames per 10 minutes; updates are spaced 5 minutes apart, and a skipped update is retried shortly after instead of being lost. The channel is also refreshed at startup and every 30 minutes, so the number stays right after a restart. Both settings live in `data/bot-settings.json` (`DATA_DIR`), so mount a volume to keep them across deploys.
+
+Both features need the **Server Members Intent**: enable it in the Developer Portal and set `ENABLE_GUILD_MEMBERS_INTENT=true`. Without it the bot still starts (and says so in the log), but joins and leaves are never delivered.
+
 ## Owner-only commands
 
-`/key`, `/manage` and every `setup-*` command are reserved for the **owner** role. The check runs once in `src/index.js`: a command declares `access: 'owner'` and is refused with an ephemeral message for anyone else, even a Discord administrator. The Discord server owner always counts as owner, so the server can never lock itself out. The role name comes from `OWNER_ROLE_NAME` (comma separated, defaults to `owner`), and the startup log says which role was found.
+`/key`, `/manage`, `/welcome`, `/membercount` and every `setup-*` command are reserved for the **owner** role. The check runs once in `src/index.js`: a command declares `access: 'owner'` and is refused with an ephemeral message for anyone else, even a Discord administrator. The Discord server owner always counts as owner, so the server can never lock itself out. The role name comes from `OWNER_ROLE_NAME` (comma separated, defaults to `owner`), and the startup log says which role was found.
 
 Ticket commands (`/close`, `/close-request`), `/verify`, `/review` and `/learn` keep their own rules: staff close tickets, members verify themselves, and the trusted AI accounts keep teaching the bot.
 

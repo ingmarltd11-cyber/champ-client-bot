@@ -12,6 +12,15 @@ const MAX_LESSONS = 100;
 const MAX_RULE_TEXT = 1500;
 const MAX_LESSON_TEXT = 500;
 
+// {user}, {name}, {server} and {count} are filled in when someone joins.
+const MAX_WELCOME_MESSAGE = 1500;
+const DEFAULT_WELCOME_MESSAGE =
+  '👋 Welcome {user} to **{server}**! You are member **#{count}**.';
+
+// The member counter is a voice channel name, and Discord cuts those off at 100 characters.
+const MAX_STATS_TEMPLATE = 100;
+const DEFAULT_STATS_TEMPLATE = '👥 Members: {count}';
+
 const DEFAULTS = {
   // false = the trusted operators can still talk to the assistant, but no action tool runs.
   aiAdminEnabled: true,
@@ -23,6 +32,12 @@ const DEFAULTS = {
   lessons: [],
   // { id, type: 'role', roleId, roleName, userId: null, panelId: '*' }
   ticketActions: [],
+  // Channel that gets the welcome message. null = welcome messages are off.
+  welcomeChannelId: null,
+  welcomeMessage: DEFAULT_WELCOME_MESSAGE,
+  // Voice channel whose name shows the member count. null = the counter is off.
+  statsChannelId: null,
+  statsTemplate: DEFAULT_STATS_TEMPLATE,
 };
 
 function clone(value) {
@@ -75,6 +90,18 @@ function normalizeAction(action) {
   };
 }
 
+// A stored template always comes back usable: missing, blank or oversized values fall back to
+// the default instead of leaving the bot with nothing to send.
+function normalizeTemplate(value, fallback, maxLength) {
+  if (typeof value !== 'string') return fallback;
+  const text = value.trim();
+  return text ? text.slice(0, maxLength) : fallback;
+}
+
+function normalizeChannelId(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function normalizeSettings(value = {}) {
   const settings = clone(DEFAULTS);
 
@@ -83,6 +110,19 @@ function normalizeSettings(value = {}) {
     typeof value.learningChannelId === 'string' && value.learningChannelId
       ? value.learningChannelId
       : null;
+
+  settings.welcomeChannelId = normalizeChannelId(value.welcomeChannelId);
+  settings.welcomeMessage = normalizeTemplate(
+    value.welcomeMessage,
+    DEFAULT_WELCOME_MESSAGE,
+    MAX_WELCOME_MESSAGE
+  );
+  settings.statsChannelId = normalizeChannelId(value.statsChannelId);
+  settings.statsTemplate = normalizeTemplate(
+    value.statsTemplate,
+    DEFAULT_STATS_TEMPLATE,
+    MAX_STATS_TEMPLATE
+  );
 
   settings.learnedRules = Array.isArray(value.learnedRules)
     ? value.learnedRules.map(normalizeRule).filter(Boolean).slice(-MAX_RULES)
@@ -142,6 +182,34 @@ function getLearningChannelId() {
 function setLearningChannelId(channelId) {
   return updateSettings({ learningChannelId: channelId ? String(channelId) : null })
     .learningChannelId;
+}
+
+function getWelcomeSettings() {
+  const settings = readSettings();
+  return { channelId: settings.welcomeChannelId, message: settings.welcomeMessage };
+}
+
+// null turns welcome messages off; the message itself is kept.
+function setWelcomeChannelId(channelId) {
+  return updateSettings({ welcomeChannelId: channelId ? String(channelId) : null })
+    .welcomeChannelId;
+}
+
+function setWelcomeMessage(message) {
+  return updateSettings({ welcomeMessage: message }).welcomeMessage;
+}
+
+function getStatsSettings() {
+  const settings = readSettings();
+  return { channelId: settings.statsChannelId, template: settings.statsTemplate };
+}
+
+function setStatsChannelId(channelId) {
+  return updateSettings({ statsChannelId: channelId ? String(channelId) : null }).statsChannelId;
+}
+
+function setStatsTemplate(template) {
+  return updateSettings({ statsTemplate: template }).statsTemplate;
 }
 
 function listLearnedRules() {
@@ -363,8 +431,18 @@ module.exports = {
   DATA_FILE,
   MAX_RULES,
   MAX_LESSONS,
+  MAX_WELCOME_MESSAGE,
+  MAX_STATS_TEMPLATE,
+  DEFAULT_WELCOME_MESSAGE,
+  DEFAULT_STATS_TEMPLATE,
   getSettings,
   updateSettings,
+  getWelcomeSettings,
+  setWelcomeChannelId,
+  setWelcomeMessage,
+  getStatsSettings,
+  setStatsChannelId,
+  setStatsTemplate,
   isAiAdminEnabled,
   setAiAdminEnabled,
   getLearningChannelId,
