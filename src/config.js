@@ -51,6 +51,12 @@ const TICKETS = {
   closeDelaySeconds: 5,
   // Button colours for ticket buttons: blue, grey, green or red.
   buttonColors: { close: 'red', accept: 'red', deny: 'grey' },
+  // The client versions the server supports, newest last. Any other version in a ticket gets
+  // an upgrade hint from the ticket assistant. Comma separated for several builds.
+  supportedVersions: (process.env.SUPPORTED_CLIENT_VERSION ?? '1.21.11')
+    .split(',')
+    .map((version) => version.trim())
+    .filter(Boolean),
 };
 
 // Support assistant in ticket channels. Without AI_API_KEY it stays off and the bot works as before.

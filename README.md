@@ -64,6 +64,8 @@ npm run identity  # optional, once: set the bot name and profile picture from as
 | `/ticket-panels create\|list\|remove\|set-default` | Admin | Manage multiple saved panels |
 | `/ticket-category add\|remove\|list` | Admin | Manage panel categories |
 | `/ticket-category question-add\|question-remove\|message-set\|message-clear` | Admin | Set the form questions (max 5, 45 characters each) and the welcome message of a category |
+| `/close [reason]` | Staff / opener | Staff close the ticket at once; the opener sends a close request instead |
+| `/close-request [reason]` | Staff / opener | Post the close request with Accept and Deny buttons |
 | `/review stars description` | Everyone | Post a review in `#reviews` |
 | `/learn add\|lesson\|list\|remove\|clear\|channel` | Admin / trusted | Teach replies, reactions and lessons; show the training channel |
 | `/setrole user role` | Admin / trusted | Give the role now and every time that member opens a ticket |
@@ -143,6 +145,19 @@ The assistant turns those sentences into saved rules with its own tools, so a ru
 ## Ticket actions
 
 `/setrole user role` gives the role now **and** every time that member opens a ticket. `/ticket-actions add role [user] [panel]` does the same without the immediate role: leave `user` out for everyone, leave `panel` out for every panel. `/ticket-actions list` shows them, `remove` takes one away and `clear` removes a member's actions or everything. A role the bot cannot hand out (too high, managed by an integration, missing permission) is reported in the ticket instead of breaking it.
+
+## Ticket assistant, /close and close requests
+
+When a ticket opens, the bot reads the answers of the form and answers right away when it recognises the problem. Today it checks the client version: a ticket that says `1.21.10` (or any other build) gets *"Client version 1.21.10 is not supported. You are on 1.21.10. 1.21.11 is our only version. Please upgrade, start the game again and try once more."* The supported versions come from `SUPPORTED_CLIENT_VERSION` (default `1.21.11`, comma separated for several builds). A version without a patch number, such as `1.21`, counts as supported so nobody is sent away for nothing.
+
+That answer is posted with a 👍 and a 👎 reaction, and only the opener can use them:
+
+- 👍 asks staff to close the ticket: the bot posts the normal close request with **Accept close** and **Deny**.
+- 👎 asks the opener what exactly still fails, so they can send the error and staff can take over.
+
+Staff can close a ticket with `/close`, or with the **Close Ticket** button. The opener who runs `/close` (or the button) sends a close request instead; only staff can accept it. A close request can also be posted by hand with `/close-request [reason]`. Both commands work in a normal ticket channel and in a forum post: a forum post is locked and archived instead of deleted, and every ticket still gets its transcript in DM.
+
+New posts in a forum channel (for example a bug-report forum) get the same version check on the opening post. A reply inside the post does not trigger it again, and a post that does not mention a client version is left alone.
 
 ## Project structure
 

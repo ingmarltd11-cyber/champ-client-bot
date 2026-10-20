@@ -17,6 +17,7 @@ const { loadCategories, MAX_QUESTIONS, MAX_MESSAGE_LENGTH, buttonStyle } = requi
 const { DEFAULT_PANEL_ID, getPanel, panelCategories } = require('../utils/ticketPanels');
 const { createTranscript } = require('../utils/transcript');
 const { saveTicketOpened, saveTicketClosed } = require('../utils/ticketStore');
+const triage = require('./ticketTriage');
 
 const USER_ACCESS = [
   PermissionFlagsBits.ViewChannel,
@@ -118,6 +119,20 @@ function getOpenerId(channel) {
   return match ? match[1] : null;
 }
 
+// Ticket posts in a forum are threads: the post owner is the opener. Any other thread is not a
+// ticket, so /close cannot archive an unrelated conversation.
+function isTicketThread(channel) {
+  return Boolean(
+    channel?.isThread?.() &&
+      (channel.parent?.type === ChannelType.GuildForum || getOpenerId(channel))
+  );
+}
+
+// Works for both ticket shapes: a text channel with the opener in its topic, and a forum post.
+function ticketOpenerId(channel) {
+  return getOpenerId(channel) ?? (isTicketThread(channel) ? channel.ownerId ?? null : null);
+}
+
 function findExistingTicket(guild, user) {
   const channelName = ticketChannelName(user.username);
   return guild.channels.cache.find((channel) => channel.name === channelName) ?? null;
@@ -186,6 +201,12 @@ async function createTicket(interaction, category, answers, panelId = DEFAULT_PA
     );
 
     await channel.send({ content: `${user}`, embeds: [embed], components: [row] });
+
+    // The ticket assistant answers the form right away, for example when the client version is
+    // not one we support, and offers 👍 / 👎 so the opener can confirm or explain.
+    await triage
+      .postTriage(channel, { answers })
+      .catch((err) => console.error('Could not post the ticket advice:', err.message));
 
     // Roles configured with /setrole or /ticket-actions are given to the opener here.
     const applied = await applyTicketActions(interaction.member, { panelId });
@@ -326,14 +347,18 @@ async function sendTranscript(channel, openerId) {
   }
 }
 
-// Posts the closing message with the reason, saves it, and deletes the channel after a short delay.
+// Posts the closing message with the reason, saves it, and deletes the channel after a short
+// delay. A forum post cannot be deleted like a channel, so it is locked and archived instead.
 async function closeTicket(channel, closer, reason) {
   if (closing.has(channel.id)) return;
   closing.add(channel.id);
 
+  const thread = Boolean(channel.isThread?.());
   const seconds = TICKETS.closeDelaySeconds;
   await channel.send({
-    content: `🔒 Ticket closed by ${closer}.\n**Reason:** ${reason}\nThis channel will be deleted in ${seconds} seconds.`,
+    content: `🔒 Ticket closed by ${closer}.\n**Reason:** ${reason}\n${
+      thread ? 'This post is now locked and archived.' : `This channel will be deleted in ${seconds} seconds.`
+    }`,
     allowedMentions: { parse: [] },
   });
 
@@ -342,7 +367,17 @@ async function closeTicket(channel, closer, reason) {
   );
 
   // Sent before the delete timer starts, so the channel is not removed mid-transcript.
-  await sendTranscript(channel, getOpenerId(channel));
+  await sendTranscript(channel, ticketOpenerId(channel));
+
+  if (thread) {
+    await channel.setLocked(true, 'Ticket closed').catch((err) => {
+      console.error('Could not lock the ticket post:', err.message);
+    });
+    await channel.setArchived(true, 'Ticket closed').catch((err) => {
+      console.error('Could not archive the ticket post:', err.message);
+    });
+    return;
+  }
 
   setTimeout(() => {
     channel.delete('Ticket closed').catch((err) => {
@@ -353,7 +388,7 @@ async function closeTicket(channel, closer, reason) {
 
 // Anyone who can see a ticket can ask to close it, but a reason is required.
 async function requestClose(interaction) {
-  const openerId = getOpenerId(interaction.channel);
+  const openerId = ticketOpenerId(interaction.channel);
   if (!openerId) {
     return interaction.reply({ content: '❌ This is not a ticket channel.', flags: MessageFlags.Ephemeral });
   }
@@ -378,28 +413,13 @@ async function requestClose(interaction) {
   return interaction.showModal(modal);
 }
 
-// Staff close at once. The opener's request goes to staff as a close request with Accept/Deny buttons.
-async function handleCloseModal(interaction) {
-  const channel = interaction.channel;
-  const openerId = getOpenerId(channel);
-  if (!openerId) {
-    return interaction.reply({ content: '❌ This is not a ticket channel.', flags: MessageFlags.Ephemeral });
-  }
-
-  const reason = interaction.fields.getTextInputValue('reason').trim();
-  if (!reason) {
-    return interaction.reply({ content: '❌ A reason is required.', flags: MessageFlags.Ephemeral });
-  }
-
-  if (isStaff(interaction.member)) {
-    await interaction.reply({ content: 'Closing this ticket.', flags: MessageFlags.Ephemeral });
-    return closeTicket(channel, interaction.user, reason);
-  }
-
-  const supportRole = findRole(interaction.guild, ROLES.support);
+// Posts the close request staff can accept or deny. Used by the ticket button, /close-request
+// and the 👍 on the ticket assistant's advice.
+async function postCloseRequest(channel, guild, requester, reason) {
+  const supportRole = findRole(guild, ROLES.support);
   const embed = new EmbedBuilder()
     .setTitle('Close request')
-    .setDescription(`${interaction.user} asks to close this ticket. Staff can accept or deny the request.`)
+    .setDescription(`${requester} asks to close this ticket. Staff can accept or deny the request.`)
     .addFields({ name: 'Reason', value: reason })
     .setColor(BRAND_COLOR)
     .setTimestamp();
@@ -415,11 +435,32 @@ async function handleCloseModal(interaction) {
       .setStyle(buttonStyle(TICKETS.buttonColors.deny))
   );
 
-  await channel.send({
+  return channel.send({
     content: supportRole ? `${supportRole}` : undefined,
     embeds: [embed],
     components: [row],
   });
+}
+
+// Staff close at once. The opener's request goes to staff as a close request with Accept/Deny buttons.
+async function handleCloseModal(interaction) {
+  const channel = interaction.channel;
+  const openerId = ticketOpenerId(channel);
+  if (!openerId) {
+    return interaction.reply({ content: '❌ This is not a ticket channel.', flags: MessageFlags.Ephemeral });
+  }
+
+  const reason = interaction.fields.getTextInputValue('reason').trim();
+  if (!reason) {
+    return interaction.reply({ content: '❌ A reason is required.', flags: MessageFlags.Ephemeral });
+  }
+
+  if (isStaff(interaction.member)) {
+    await interaction.reply({ content: 'Closing this ticket.', flags: MessageFlags.Ephemeral });
+    return closeTicket(channel, interaction.user, reason);
+  }
+
+  await postCloseRequest(channel, interaction.guild, interaction.user, reason);
   return interaction.reply({ content: '✅ Your close request has been sent to staff.', flags: MessageFlags.Ephemeral });
 }
 
@@ -446,12 +487,70 @@ async function denyCloseRequest(interaction) {
   });
 }
 
+// Thumbs up on the ticket advice asks staff to close the ticket; thumbs down asks the opener
+// what still fails. Only the ticket opener votes, so staff keep using /close and /close-request.
+async function handleTriageReaction(reaction, user) {
+  if (!user || user.bot) return false;
+
+  const message = reaction.message?.partial
+    ? await reaction.message.fetch().catch(() => null)
+    : reaction.message;
+  if (!message || !triage.isTriageMessage(message)) return false;
+
+  const channel = message.channel;
+  const openerId = ticketOpenerId(channel);
+  if (!openerId || user.id !== openerId) return false;
+
+  const emoji = reaction.emoji?.name;
+
+  if (emoji === triage.HELPFUL) {
+    await postCloseRequest(
+      channel,
+      message.guild,
+      user,
+      'The ticket advice worked (👍 from the opener).'
+    );
+    return true;
+  }
+
+  if (emoji === triage.NOT_HELPFUL) {
+    await channel.send({
+      content:
+        `${user} Thanks for checking. What exactly went wrong? ` +
+        'Send the error message, a screenshot or the step where it fails, and staff will help you further.',
+      allowedMentions: { users: [user.id] },
+    });
+    return true;
+  }
+
+  return false;
+}
+
+// A new post in a forum (bug reports) is a ticket too: the opening post is checked for a client
+// version we do not support. Every other post and channel is left alone.
+async function handleForumTriage(message) {
+  const channel = message?.channel;
+  if (!message?.guild || message.author?.bot || message.system || message.webhookId) return false;
+  if (!isTicketThread(channel)) return false;
+  // A forum post and its starter message share an ID, so this answers the opening post once.
+  if (message.id !== channel.id) return false;
+
+  const posted = await triage
+    .postTriage(channel, { content: message.content })
+    .catch((err) => {
+      console.error('Could not post the ticket advice:', err.message);
+      return null;
+    });
+  return Boolean(posted);
+}
+
 module.exports = {
   UNVERIFIED_TICKET_ID,
   UNVERIFIED_CATEGORY,
   isVerifiedMember,
   parseTicketId,
   findCategoryInPanel,
+  getTicketOpenerId: ticketOpenerId,
   handleOpen,
   openUnverifiedTicket,
   handleFormSubmit,
@@ -459,5 +558,9 @@ module.exports = {
   handleCloseModal,
   acceptCloseRequest,
   denyCloseRequest,
+  closeTicket,
+  postCloseRequest,
+  handleTriageReaction,
+  handleForumTriage,
   CLOSE_MODAL_ID,
 };

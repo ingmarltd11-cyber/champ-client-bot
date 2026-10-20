@@ -566,7 +566,201 @@ test('every command file loads with a name, description and execute', () => {
   }
 
   const names = commands.map((command) => command.data.name);
-  for (const expected of ['learn', 'setrole', 'ticket-actions', 'ai-stop', 'ai-start']) {
+  for (const expected of [
+    'learn',
+    'setrole',
+    'ticket-actions',
+    'ai-stop',
+    'ai-start',
+    'close',
+    'close-request',
+  ]) {
     assert.ok(names.includes(expected), `${expected} is missing`);
   }
+});
+
+// --- Ticket advice, /close and /close-request --------------------------------------
+
+const triage = require('../src/features/ticketTriage');
+const closeCommand = require('../src/commands/close');
+const closeRequestCommand = require('../src/commands/close-request');
+
+// Discord user IDs are numeric; the ticket topic stores the opener that way.
+const OPENER = '111111111111111111';
+
+function makeAdviceChannel(openerId = OPENER) {
+  const channel = {
+    id: 'ticket-1',
+    topic: `ticket-opener:${openerId} type:general-support panel:default`,
+    sent: [],
+    send: async (payload) => {
+      const message = {
+        id: 'advice-1',
+        client: { user: { id: 'bot' } },
+        author: { id: 'bot' },
+        embeds: payload.embeds ?? [],
+        guild: { id: 'guild', roles: { cache: new Collection() } },
+        channel,
+        reacted: [],
+        react: async (emoji) => {
+          message.reacted.push(emoji);
+          return emoji;
+        },
+      };
+      channel.sent.push(payload);
+      return message;
+    },
+  };
+  return channel;
+}
+
+function makeCommandInteraction(channel, { opener = OPENER, staff = false, options = {} } = {}) {
+  const replies = [];
+  const member = {
+    permissions: { has: () => staff },
+    roles: { cache: staff ? [{ name: 'Support' }] : [] },
+  };
+
+  return {
+    guild: { id: 'guild', roles: { cache: new Collection() } },
+    channel,
+    member,
+    user: { id: opener, bot: false, username: 'member', toString: () => `<@${opener}>` },
+    replies,
+    options: { getString: (name) => options[name] ?? null },
+    reply: async (payload) => {
+      replies.push(payload);
+      return payload;
+    },
+  };
+}
+
+test('an unsupported client version gets an upgrade answer', () => {
+  const suggestion = triage.suggestionFor({
+    answers: [{ question: 'What is your client version?', answer: '1.21.10' }],
+  });
+
+  assert.ok(suggestion, 'no advice for an old version');
+  assert.match(suggestion.title, /1\.21\.10/);
+  assert.match(suggestion.body, /1\.21\.11 is our only version/);
+  assert.match(suggestion.body, /upgrade/i);
+});
+
+test('the supported version and a versionless ticket get no advice', () => {
+  assert.equal(
+    triage.suggestionFor({ answers: [{ question: 'Client?', answer: '1.21.11' }] }),
+    null
+  );
+  // "1.21" without the patch number is the supported build.
+  assert.equal(triage.suggestionFor({ content: 'i play on 1.21' }), null);
+  assert.equal(triage.suggestionFor({ content: 'my game crashes on startup' }), null);
+  assert.equal(triage.suggestionFor({ answers: [] }), null);
+});
+
+test('the advice is posted with a thumb up and a thumb down', async () => {
+  const channel = makeAdviceChannel();
+  const advice = await triage.postTriage(channel, {
+    answers: [{ question: 'What is your client version?', answer: '1.21.10' }],
+  });
+
+  assert.ok(advice, 'no advice posted');
+  assert.deepEqual(advice.reacted, ['👍', '👎']);
+  assert.equal(advice.embeds[0].data.footer.text, triage.TRIAGE_FOOTER);
+
+  // A ticket without a known problem stays quiet.
+  const quiet = makeAdviceChannel();
+  assert.equal(await triage.postTriage(quiet, { content: 'help' }), null);
+  assert.equal(quiet.sent.length, 0);
+});
+
+test('only the opener votes on the advice, and 👍 asks staff to close the ticket', async () => {
+  const channel = makeAdviceChannel(OPENER);
+  const advice = await triage.postTriage(channel, { content: 'client: 1.21.10' });
+
+  const staffVote = await tickets.handleTriageReaction(
+    { emoji: { name: '👍' }, message: advice },
+    { id: 'staff-1', bot: false }
+  );
+  assert.equal(staffVote, false);
+  assert.equal(channel.sent.length, 1, 'a stranger must not trigger a close request');
+
+  const vote = await tickets.handleTriageReaction(
+    { emoji: { name: '👍' }, message: advice },
+    { id: OPENER, bot: false }
+  );
+  assert.equal(vote, true);
+  assert.equal(channel.sent.length, 2);
+  assert.equal(channel.sent[1].embeds[0].data.title, 'Close request');
+  assert.equal(channel.sent[1].components[0].components.length, 2);
+});
+
+test('a thumb down asks what still fails', async () => {
+  const channel = makeAdviceChannel(OPENER);
+  const advice = await triage.postTriage(channel, { content: 'client: 1.21.10' });
+
+  const vote = await tickets.handleTriageReaction(
+    { emoji: { name: '👎' }, message: advice },
+    { id: OPENER, bot: false }
+  );
+  assert.equal(vote, true);
+  assert.equal(channel.sent.length, 2);
+  assert.match(channel.sent[1].content, /what exactly went wrong/i);
+});
+
+test('/close asks staff for the opener and /close-request posts the request', async () => {
+  const channel = makeAdviceChannel(OPENER);
+  const interaction = makeCommandInteraction(channel, { opener: OPENER });
+
+  await closeCommand.execute(interaction);
+  assert.match(interaction.replies[0].content, /close request has been sent/i);
+  assert.equal(channel.sent[0].embeds[0].data.title, 'Close request');
+
+  const requestChannel = makeAdviceChannel(OPENER);
+  const request = makeCommandInteraction(requestChannel, { opener: OPENER, options: { reason: 'Solved' } });
+  await closeRequestCommand.execute(request);
+  assert.equal(requestChannel.sent[0].embeds[0].data.fields[0].value, 'Solved');
+});
+
+test('/close refuses a channel that is not a ticket', async () => {
+  const reply = [];
+  const interaction = {
+    guild: { id: 'guild' },
+    channel: { id: 'general', topic: null, send: async () => ({}) },
+    member: { permissions: { has: () => true }, roles: { cache: [] } },
+    user: { id: 'someone' },
+    options: { getString: () => null },
+    reply: async (payload) => reply.push(payload.content),
+  };
+
+  await closeCommand.execute(interaction);
+  assert.match(reply[0], /not a ticket/i);
+});
+
+test('a new forum post with an old client version is answered once', async () => {
+  const channel = {
+    id: 'post-1',
+    isThread: () => true,
+    parent: { type: ChannelType.GuildForum },
+    sent: [],
+    send: async (payload) => {
+      channel.sent.push(payload);
+      return { id: 'advice', reacted: [], react: async () => {}, embeds: payload.embeds };
+    },
+  };
+  const post = {
+    id: 'post-1',
+    guild: { id: 'guild' },
+    channel,
+    author: { id: 'member-1', bot: false },
+    system: false,
+    webhookId: null,
+    content: 'client version: 1.20.4, the menu does not open',
+  };
+
+  assert.equal(await tickets.handleForumTriage(post), true);
+  assert.equal(channel.sent.length, 1);
+
+  // A reply inside the post is not the opening post, so it gets no second advice.
+  assert.equal(await tickets.handleForumTriage({ ...post, id: 'post-2' }), false);
+  assert.equal(channel.sent.length, 1);
 });

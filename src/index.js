@@ -6,6 +6,7 @@ const {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  Partials,
 } = require('discord.js');
 const { assertEnv, REQUIRED_ENV, AI } = require('./config');
 const { loadCommands } = require('./utils/loadCommands');
@@ -33,12 +34,18 @@ const intents = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
+  // Needed for the 👍 / 👎 on the ticket assistant's advice.
+  GatewayIntentBits.GuildMessageReactions,
 ];
 if (process.env.ENABLE_GUILD_MEMBERS_INTENT === 'true') {
   intents.push(GatewayIntentBits.GuildMembers);
 }
 
-const client = new Client({ intents });
+// Reactions on older messages arrive as partials, so they still reach the ticket assistant.
+const client = new Client({
+  intents,
+  partials: [Partials.Message, Partials.Reaction, Partials.User, Partials.Channel],
+});
 
 client.commands = new Collection();
 for (const command of loadCommands()) {
@@ -74,7 +81,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 
 let warnedAboutContent = false;
 
-client.on(Events.MessageCreate, (message) => {
+client.on(Events.MessageCreate, async (message) => {
   // Without the Message Content intent Discord sends the message with empty text.
   if (!warnedAboutContent && message.guild && !message.author?.bot && !message.content) {
     warnedAboutContent = true;
@@ -85,15 +92,25 @@ client.on(Events.MessageCreate, (message) => {
 
   filterMessage(message).catch((err) => console.error('Word filter failed:', err));
 
-  // A learned rule (taught in the training channel) answers first, for every member. When no
-  // rule matches, the assistant answers only if the bot is pinged, and it never gives code.
-  learning
-    .handleLearnedRule(message)
-    .then((handled) => {
-      if (!handled) return aiSupport.handleMessage(message);
-      return null;
-    })
-    .catch((err) => console.error('AI support failed:', err));
+  try {
+    // A new post in a ticket forum is answered first when its opening post shows a problem the
+    // ticket assistant knows, for example an unsupported client version.
+    if (await tickets.handleForumTriage(message)) return;
+
+    // A learned rule (taught in the training channel) answers next, for every member. When no
+    // rule matches, the assistant answers only if the bot is pinged, and it never gives code.
+    if (await learning.handleLearnedRule(message)) return;
+
+    await aiSupport.handleMessage(message);
+  } catch (err) {
+    console.error('AI support failed:', err);
+  }
+});
+
+client.on(Events.MessageReactionAdd, (reaction, user) => {
+  tickets
+    .handleTriageReaction(reaction, user)
+    .catch((err) => console.error('Ticket advice reaction failed:', err.message));
 });
 
 client.on(Events.MessageUpdate, (_oldMessage, message) => {
