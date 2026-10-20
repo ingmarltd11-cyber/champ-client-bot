@@ -178,15 +178,26 @@ function addLearnedRule({ trigger = '*', response, mode = 'reply', createdBy = n
   return rule;
 }
 
-// `idOrIndex` is a rule ID, or a 1-based position from /learn list.
+// `idOrIndex` is a rule ID, a 1-based position from /learn list, a trigger, or the reply text
+// itself ("ik praat nederlands"), so a rule can be removed without looking up its number.
 function removeLearnedRule(idOrIndex) {
   const settings = readSettings();
   const wanted = String(idOrIndex ?? '').trim().replace(/^#/, '');
   if (!wanted) return null;
 
-  const index = /^\d+$/.test(wanted)
-    ? Number(wanted) - 1
-    : settings.learnedRules.findIndex((rule) => rule.id === wanted);
+  let index;
+  if (/^\d+$/.test(wanted)) {
+    index = Number(wanted) - 1;
+  } else {
+    const lower = wanted.toLowerCase();
+    index = settings.learnedRules.findIndex((rule) => rule.id === wanted);
+    if (index < 0) {
+      index = settings.learnedRules.findIndex((rule) => rule.response.toLowerCase() === lower);
+    }
+    if (index < 0) {
+      index = settings.learnedRules.findIndex((rule) => rule.trigger.toLowerCase() === lower);
+    }
+  }
   if (index < 0 || index >= settings.learnedRules.length) return null;
 
   const [removed] = settings.learnedRules.splice(index, 1);
@@ -202,15 +213,20 @@ function clearLearnedRules() {
   return count;
 }
 
-// The first rule whose trigger appears in the message. "*" always matches, so a rule that
-// applies to every message wins over nothing. Triggers can list alternatives with "|".
+// The first rule whose trigger appears in the message. A concrete trigger always beats a
+// catch-all, no matter which was taught first, so one old "*" rule cannot silence every rule
+// added after it. Between several "*" rules the newest wins: teaching again replaces the
+// answer instead of the bot repeating the first catch-all forever.
+// Triggers can list alternatives with "|".
 function findMatchingRule(content) {
   const text = String(content ?? '').trim();
   if (!text) return null;
 
   const lower = text.toLowerCase();
-  for (const rule of listLearnedRules()) {
-    if (rule.trigger === '*') return rule;
+  const rules = listLearnedRules();
+
+  for (const rule of rules) {
+    if (rule.trigger === '*') continue;
 
     const triggers = rule.trigger
       .split('|')
@@ -218,7 +234,8 @@ function findMatchingRule(content) {
       .filter(Boolean);
     if (triggers.some((trigger) => lower.includes(trigger))) return rule;
   }
-  return null;
+
+  return [...rules].reverse().find((rule) => rule.trigger === '*') ?? null;
 }
 
 function listLessons() {

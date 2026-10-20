@@ -51,9 +51,11 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('remove')
-        .setDescription('Remove a learned rule by its number or ID.')
-        .addStringOption((option) =>
-          option.setName('rule').setDescription('Number from /learn list, or the rule ID').setRequired(true)
+        .setDescription('Remove a learned rule by its number or ID.')        .addStringOption((option) =>
+          option
+            .setName('rule')
+            .setDescription('Number from /learn list, the rule ID, its trigger, or its reply text')
+            .setRequired(true)
         )
     )
     .addSubcommand((sub) => sub.setName('clear').setDescription('Remove every learned rule and lesson.'))
@@ -108,7 +110,12 @@ module.exports = {
 
     if (sub === 'remove') {
       const removed = settings.removeLearnedRule(interaction.options.getString('rule', true));
-      if (!removed) return reply(interaction, '❌ No learned rule matches that number or ID. Check `/learn list`.');
+      if (!removed) {
+        return reply(
+          interaction,
+          '❌ No learned rule matches that number, ID, trigger or reply. Check `/learn list`.'
+        );
+      }
 
       return reply(interaction, `✅ Removed: \`${removed.trigger}\` → \`${removed.response}\`.`);
     }

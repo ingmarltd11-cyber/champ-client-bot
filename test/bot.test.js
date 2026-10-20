@@ -366,6 +366,30 @@ test('rules can be listed and removed by number', async () => {
   assert.equal(settings.findMatchingRule('poep'), null);
 });
 
+test('an unwanted catch-all can be removed by the text it replies with', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: 'ik praat nederlands' });
+  settings.addLearnedRule({ trigger: 'hallo', response: 'hoi' });
+
+  const removed = settings.removeLearnedRule('Ik Praat Nederlands');
+  assert.equal(removed.response, 'ik praat nederlands');
+  assert.equal(settings.findMatchingRule('zomaar iets'), null);
+  assert.equal(settings.findMatchingRule('hallo').response, 'hoi');
+});
+
+test('a catch-all rule no longer silences rules taught after it', async () => {
+  resetSettings();
+  settings.addLearnedRule({ trigger: '*', response: 'ik praat nederlands' });
+  settings.addLearnedRule({ trigger: 'hallo', response: 'hoi!' });
+
+  assert.equal(settings.findMatchingRule('hallo daar').response, 'hoi!');
+  assert.equal(settings.findMatchingRule('iets anders').response, 'ik praat nederlands');
+
+  // Teaching a new catch-all replaces the old answer instead of being ignored.
+  settings.addLearnedRule({ trigger: '*', response: 'poep' });
+  assert.equal(settings.findMatchingRule('iets anders').response, 'poep');
+});
+
 test('/ai-stop blocks every tool, /ai-start gives them back', async () => {
   resetSettings();
   const message = { author: { bot: false, username: 'sora_developing', id: '1' }, guild: { id: 'guild' } };

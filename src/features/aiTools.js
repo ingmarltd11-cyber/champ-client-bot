@@ -516,10 +516,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'forget_rule',
-      description: 'Remove a learned message rule by its number from list_learning or by its ID.',
+      description:
+        'Remove a learned message rule by its number from list_learning, its ID, its trigger, or the exact text it replies with.',
       parameters: {
         type: 'object',
-        properties: { rule: { type: 'string', description: 'Rule number or ID.' } },
+        properties: { rule: { type: 'string', description: 'Rule number, ID, trigger or reply text.' } },
         required: ['rule'],
       },
     },
@@ -1372,7 +1373,7 @@ function teachRule(message, args) {
 
 function forgetRule(args) {
   const removed = settings.removeLearnedRule(args.rule);
-  if (!removed) return { text: 'No learned rule matches that number or ID.' };
+  if (!removed) return { text: 'No learned rule matches that number, ID, trigger or reply.' };
   return {
     text: `Forgot the rule: "${removed.trigger}" → "${removed.response}".`,
     summary: `removed a learned rule (${removed.trigger})`,
