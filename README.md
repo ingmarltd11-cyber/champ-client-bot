@@ -212,6 +212,7 @@ Ticket commands (`/close`, `/close-request`), `/verify`, `/review` and `/learn` 
 `/key generate` makes keys in the website's `licenses` table, in the same `CHAMP-XXXX-XXXX-XXXX-XXXX` shape the dashboard and the client expect:
 
 - **Without `email`** the key is free to hand out. It gets a placeholder address (`unassigned+<key>@keys.champclient.local`) so the row is valid; the customer opens the dashboard, clicks **Redeem a key** and the key is linked to their account. Until then nobody can download with it.
+- The website admin panel lists every key under **Orders & Keys**; a key without an owner shows as **Unclaimed** until the first account redeems it.
 - **With `email`** the key is linked to that customer at once. If that email already has a license for the plan, the existing key is reactivated instead of creating a second one (the table allows one license per email and plan, exactly like Stripe checkout does).
 - **Expiry**: monthly keys last 30 days, lifetime keys never expire, and `days` overrides both. The clock starts when the key is generated, so make a monthly key when you hand it over (or give it more `days`).
 - `revoke` sets the status to `revoked`, so `/api/license/validate` and the download endpoint refuse the key; `restore` switches it back on; `delete` removes the row for good and needs `confirm: true`.
